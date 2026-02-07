@@ -97,6 +97,9 @@ public final class TerminalRenderer {
             int currentCharIndex = 0;
             float measuredWidthForRun = 0.f;
 
+            Rect bitmapSrcRect = new Rect();
+            RectF bitmapDestRect = new RectF();
+
             for (int column = 0; column < columns; ) {
                 final char charAtIndex = line[currentCharIndex];
                 final boolean charIsHighsurrogate = Character.isHighSurrogate(charAtIndex);
@@ -105,18 +108,17 @@ public final class TerminalRenderer {
                 final long style = lineObject.getStyle(column);
                 if (TextStyle.isTerminalBitmap(style)) {
                     Bitmap bitmap = mEmulator.getScreen().getSixelBitmap(style);
-                    if (bitmap != null) {
+                    if (bitmap != null && screen.getSixelRect(style, bitmapSrcRect)) {
                         float left = column * mFontWidth;
                         float top = heightOffset - mFontLineSpacing;
-                        Rect bitmapSrcRect = mEmulator.getScreen().getSixelRect(style);
-                        RectF bitmapDestRect = new RectF(left, top, left + mFontWidth, top + mFontLineSpacing);
+                        bitmapDestRect.set(left, top, left + mFontWidth, top + mFontLineSpacing);
                         canvas.drawBitmap(bitmap, bitmapSrcRect, bitmapDestRect, null);
                     }
                     column += 1;
                     measuredWidthForRun = 0.f;
                     lastRunStyle = 0;
                     lastRunInsideCursor = false;
-                    lastRunStartColumn = column + 1;
+                    lastRunStartColumn = column;
                     lastRunStartIndex = currentCharIndex;
                     lastRunFontWidthMismatch = false;
                     currentCharIndex += charsForCodePoint;

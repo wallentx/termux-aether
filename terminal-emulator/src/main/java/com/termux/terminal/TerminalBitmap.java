@@ -439,7 +439,7 @@ public class TerminalBitmap {
                 return null;
             }
 
-            int[] pixels = new int[bitmap.getAllocationByteCount()];
+            int[] pixels = new int[bitmap.getWidth() * bitmap.getHeight()];
             bitmap.getPixels(pixels, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
 
             newBitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888);

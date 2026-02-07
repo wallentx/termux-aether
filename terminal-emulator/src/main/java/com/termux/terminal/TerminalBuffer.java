@@ -586,18 +586,25 @@ public final class TerminalBuffer {
 
 
     public synchronized Rect getSixelRect(long style) {
+        Rect rect = new Rect();
+        return getSixelRect(style, rect) ? rect : null;
+    }
+
+    public synchronized boolean getSixelRect(long style, Rect out) {
         TerminalBitmap terminalBitmap = getTerminalBitmap(style);
         if (terminalBitmap == null) {
-            return null;
+            out.setEmpty();
+            return false;
         }
 
         int x = TextStyle.getTerminalBitmapX(style);
         int y = TextStyle.getTerminalBitmapY(style);
-        return new Rect(
+        out.set(
             x * terminalBitmap.mCellWidth,
             y * terminalBitmap.mCellHeight,
             (x + 1) * terminalBitmap.mCellWidth,
             (y + 1) * terminalBitmap.mCellHeight);
+        return true;
     }
 
 
@@ -719,15 +726,13 @@ public final class TerminalBuffer {
             }
         }
 
-        if (row + 1 < mTotalRows) {
-            TerminalRow nextLine = mLines[row + 1];
-            if (nextLine.mHasTerminalBitmap) {
-                for (int column = 0; column < mColumns; column++) {
-                    long columnStyle = nextLine.getStyle(column);
-                    int bitmapNum = TextStyle.getTerminalBitmapNum(columnStyle);
-                    if (bitmapNum >= TERMINAL_BITMAP__NUM_START) {
-                        bitmapsToRemove.add(bitmapNum);
-                    }
+        TerminalRow nextLine = mLines[(row + 1) % mTotalRows];
+        if (nextLine != null && nextLine.mHasTerminalBitmap) {
+            for (int column = 0; column < mColumns; column++) {
+                long columnStyle = nextLine.getStyle(column);
+                int bitmapNum = TextStyle.getTerminalBitmapNum(columnStyle);
+                if (bitmapNum >= TERMINAL_BITMAP__NUM_START) {
+                    bitmapsToRemove.remove(bitmapNum);
                 }
             }
         }
