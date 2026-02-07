@@ -967,8 +967,8 @@ public final class TerminalEmulator {
                                 // FIXME: "coordinates of the rectangular area are affected by the setting of origin mode (DECOM)".
                                 int top = Math.min(getArg(0, 1, true) - 1, effectiveBottomMargin) + effectiveTopMargin;
                                 int left = Math.min(getArg(1, 1, true) - 1, effectiveRightMargin) + effectiveLeftMargin;
-                                int bottom = Math.min(getArg(2, mRows, true) + 1, effectiveBottomMargin - 1) + effectiveTopMargin;
-                                int right = Math.min(getArg(3, mColumns, true) + 1, effectiveRightMargin - 1) + effectiveLeftMargin;
+                                int bottom = Math.min(getArg(2, mRows, true), effectiveBottomMargin) + effectiveTopMargin;
+                                int right = Math.min(getArg(3, mColumns, true), effectiveRightMargin) + effectiveLeftMargin;
                                 if (mArgIndex >= 4) {
                                     if (mArgIndex >= mArgs.length) mArgIndex = mArgs.length - 1;
                                     for (int i = 4; i <= mArgIndex; i++) {
@@ -2993,7 +2993,7 @@ public final class TerminalEmulator {
                     }
                     break;
                 } else if (controlCommandPrefix.startsWith("ReportCellSize")) {
-                    mSession.write(String.format(Locale.ENGLISH, "\0331337;ReportCellSize=%d;%d\007", mCellHeightPixels, mCellWidthPixels));
+                    mSession.write(String.format(Locale.ENGLISH, "\033]1337;ReportCellSize=%d;%d\007", mCellHeightPixels, mCellWidthPixels));
                 }
 
                 // Free image from memory for any non `MultipartFile=` related commands.
