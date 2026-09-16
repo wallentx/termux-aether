@@ -2,6 +2,12 @@ plugins {
     id "com.android.application"
 }
 
+// Explicit diagnostic mode: never changes the default APK or production SDK baseline.
+def pixelProbe = providers.gradleProperty("pixelProbe").orNull == "true"
+if (pixelProbe && gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }) {
+    throw new GradleException("Pixel probes are debug-only; use :app:assembleDebug")
+}
+
 ext {
     // The packageVariant defines the bootstrap variant that will be included in the app APK.
     // This must be supported by com.termux.shared.termux.TermuxBootstrap.PackageVariant or app will
@@ -15,7 +21,14 @@ ext {
 android {
     namespace "com.termux"
 
-    compileSdkVersion project.properties.compileSdkVersion.toInteger()
+    if (pixelProbe) {
+        compileSdk {
+            version = release(37) { minorApiLevel = 2 }
+        }
+        buildToolsVersion '37.0.0'
+    } else {
+        compileSdkVersion project.properties.compileSdkVersion.toInteger()
+    }
     ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
     def appVersionName = System.getenv("TERMUX_APP_VERSION_NAME") ?: ""
     def apkVersionTag = System.getenv("TERMUX_APK_VERSION_TAG") ?: ""
@@ -41,8 +54,8 @@ android {
     }
 
     defaultConfig {
-        minSdkVersion project.properties.minSdkVersion.toInteger()
-        targetSdkVersion project.properties.targetSdkVersion.toInteger()
+        minSdkVersion pixelProbe ? 37 : project.properties.minSdkVersion.toInteger()
+        targetSdkVersion pixelProbe ? 37 : project.properties.targetSdkVersion.toInteger()
         versionCode 118
         versionName "0.118.0"
 
@@ -63,16 +76,25 @@ android {
         externalNativeBuild {
             ndkBuild {
                 cFlags "-std=c11", "-Wall", "-Wextra", "-Werror", "-Os", "-fno-stack-protector", "-Wl,--gc-sections"
+                if (pixelProbe) arguments "TERMUX_PIXEL_PROBE=1"
             }
+        }
+
+        if (pixelProbe) {
+            ndk { abiFilters 'arm64-v8a' }
         }
 
         splits {
             abi {
-                enable ((gradle.startParameter.taskNames.any { it.contains("Debug") } && splitAPKsForDebugBuilds == "1") ||
-                    (gradle.startParameter.taskNames.any { it.contains("Release") } && splitAPKsForReleaseBuilds == "1"))
+                enable (!pixelProbe && ((gradle.startParameter.taskNames.any { it.contains("Debug") } && splitAPKsForDebugBuilds == "1") ||
+                    (gradle.startParameter.taskNames.any { it.contains("Release") } && splitAPKsForReleaseBuilds == "1")))
                 reset ()
-                include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
-                universalApk true
+                if (pixelProbe) {
+                    include 'arm64-v8a'
+                } else {
+                    include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+                }
+                universalApk !pixelProbe
             }
         }
     }
@@ -96,6 +118,10 @@ android {
         debug {
             signingConfig signingConfigs.debug
         }
+    }
+
+    variantFilter { variant ->
+        if (pixelProbe && variant.buildType.name != 'debug') variant.setIgnore(true)
     }
 
     compileOptions {
@@ -131,7 +157,7 @@ android {
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             if (variant.buildType.name == "debug") {
-                def abi = output.getFilter(com.android.build.OutputFile.ABI)
+                def abi = output.getFilter(com.android.build.OutputFile.ABI) ?: (pixelProbe ? 'arm64-v8a' : null)
                 outputFileName = new File("termux-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "debug") + "_" + (abi ? abi : "universal") + ".apk")
             } else if (variant.buildType.name == "release") {
                 def abi = output.getFilter(com.android.build.OutputFile.ABI)
@@ -142,6 +168,13 @@ android {
 
     buildFeatures {
         buildConfig true
+    }
+
+    if (pixelProbe) {
+        sourceSets.debug {
+            java.srcDir 'src/pixelProbe/java'
+            manifest.srcFile 'src/pixelProbe/AndroidManifest.xml'
+        }
     }
 }
 
