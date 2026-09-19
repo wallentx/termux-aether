@@ -12,7 +12,7 @@ spec.loader.exec_module(capture)
 
 
 class CaptureTest(unittest.TestCase):
-    def run_capture(self, metadata):
+    def run_capture(self, metadata, empty_frames=False):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         output = Path(directory.name) / 'report'
@@ -29,6 +29,8 @@ class CaptureTest(unittest.TestCase):
                 return json.dumps({'phase': next(phases),
                                    'state': 'ready' if state_reads % 2 else 'done'})
             if 'framestats' in command:
+                if empty_frames:
+                    return ''
                 samples += 1
                 timestamp = ((samples - 1) % 3 + 1) * 100
                 return ('---PROFILEDATA---\nFlags,IntendedVsync,FrameCompleted\n'
@@ -42,7 +44,12 @@ class CaptureTest(unittest.TestCase):
              patch.object(capture.time, 'monotonic', side_effect=range(1000)), \
              patch('sys.argv', ['capture.py', '--serial', 'fake', '--remote-dir', '/run',
                                 '--output', str(output)]):
-            if metadata == 'incomplete':
+            if empty_frames:
+                with self.assertRaisesRegex(RuntimeError, 'no frames for text_scroll'):
+                    capture.main()
+                self.assertFalse((output / 'summary.json').exists())
+                self.assertTrue((output / 'workload.json').exists())
+            elif metadata == 'incomplete':
                 with self.assertRaisesRegex(TimeoutError, 'result.json'):
                     capture.main()
                 self.assertFalse((output / 'summary.json').exists())
@@ -58,6 +65,9 @@ class CaptureTest(unittest.TestCase):
 
     def test_incomplete_metadata_fails_run(self):
         self.run_capture('incomplete')
+
+    def test_hidden_display_fails_run(self):
+        self.run_capture('{"complete": true}', empty_frames=True)
 
 
 if __name__ == '__main__':

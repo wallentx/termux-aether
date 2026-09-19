@@ -101,6 +101,10 @@ def main():
             time.sleep(.2)
     else:
         raise TimeoutError('Waiting for valid workload result.json')
+    empty_phases = [s['phase'] for s in summaries if s['sampled_frames'] == 0]
+    if empty_phases:
+        raise RuntimeError('Invalid display capture: no frames for ' + ', '.join(empty_phases)
+                           + '. Keep Termux visible and the screen awake; rerun in fresh directories.')
     (args.output / 'summary.json').write_text(json.dumps(summaries, indent=2))
 
 

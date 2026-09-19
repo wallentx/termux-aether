@@ -35,6 +35,9 @@ exclude flagged frames and may differ slightly in count from aggregate counters.
 GPU-completion intervals are wall-clock intervals, not isolated GPU execution time.
 `workload.json` records terminal size, producer updates, and late producer deadlines.
 Produced updates are not guaranteed to become distinct displayed frames.
+Any phase with zero sampled frames rejects the run without writing `summary.json`;
+raw evidence remains available. This catches fully hidden phases, but does not
+prove continuous visibility: keep Termux in front throughout the measurement.
 
 Memory snapshots are process PSS/heap snapshots, not peak-memory or allocation
 profiles. Thermal state is saved after each phase. Wireless ADB, background apps,
