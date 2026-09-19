@@ -60,7 +60,7 @@ static void check_execution(const char *self) {
     char *old_path=getenv("PATH")?strdup(getenv("PATH")):NULL;
     char *path;assert(asprintf(&path,"%s:%s",directory,old_path?old_path:"/system/bin")>=0);
     assert(!setenv("PATH",path,1));free(path);assert(!setenv("AETHER_PROBE_FILE",self,1));
-    char *args[]={"preserved argv zero","--child",NULL};
+    char *args[]={"preserved argv zero","--child-identity",NULL};
     char *minimal[]={"PROBE_ENV=kept",NULL};
     for(int method=0;method<6;method++) {
         pid_t pid;
@@ -110,9 +110,12 @@ static void check_execution(const char *self) {
     char marker[PATH_MAX];assert(snprintf(marker,sizeof(marker),"%s/system-child",directory)<(int)sizeof(marker));
     char *command;assert(asprintf(&command,"echo $$ > '%s'; exec sleep 30",marker)>=0);
     pthread_t cancel_thread;assert(!pthread_create(&cancel_thread,NULL,cancelled_system_thread,command));
-    FILE *child_file=NULL;
-    for(int i=0;i<100 && !child_file;i++) {usleep(20000);child_file=fopen(marker,"r");}
-    assert(child_file);long child_pid=0;assert(fscanf(child_file,"%ld",&child_pid)==1 && child_pid>0);fclose(child_file);
+    long child_pid=0;
+    for(int i=0;i<100 && child_pid<=0;i++) {
+        usleep(20000);FILE *child_file=fopen(marker,"r");
+        if(child_file) {if(fscanf(child_file,"%ld",&child_pid)!=1) child_pid=0;fclose(child_file);}
+    }
+    assert(child_pid>0);
     assert(!pthread_cancel(cancel_thread));void *cancel_result;assert(!pthread_join(cancel_thread,&cancel_result));
     assert(cancel_result==PTHREAD_CANCELED);assert(kill((pid_t)child_pid,0)==-1 && errno==ESRCH);
     assert(!unlink(marker));free(command);
@@ -124,7 +127,8 @@ int main(int argc,char **argv) {
     if(argc>1 && !strcmp(argv[1],"--script-child with spaces")) {
         assert(argc==4 && !strcmp(argv[3],"argument with spaces"));return 43;
     }
-    if(argc>1 && !strcmp(argv[1],"--child")) {
+    if(argc>1 && (!strcmp(argv[1],"--child") || !strcmp(argv[1],"--child-identity"))) {
+        if(!strcmp(argv[1],"--child-identity")) assert(!strcmp(argv[0],"preserved argv zero"));
         if(getenv("PROBE_ENV")) {assert(!strcmp(getenv("PROBE_ENV"),"kept"));assert(!getenv("HOME"));}
         if(!strcmp(argv[0],"preserved argv zero")) assert(getenv("AETHER_TARGET"));
         return 37;
