@@ -334,8 +334,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (mIsInvalidState) return;
 
-        if (mTermuxTerminalSessionActivityClient != null)
+        if (mTermuxTerminalSessionActivityClient != null) {
+            // Reclaim callbacks after foreground/activity transitions, including stale unbinds.
+            if (mTermuxService != null)
+                mTermuxService.setTermuxTerminalSessionClient(mTermuxTerminalSessionActivityClient);
             mTermuxTerminalSessionActivityClient.onResume();
+        }
 
         if (mTermuxTerminalViewClient != null)
             mTermuxTerminalViewClient.onResume();
@@ -379,7 +383,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (mTermuxService != null) {
             // Do not leave service and session clients with references to activity.
-            mTermuxService.unsetTermuxTerminalSessionClient();
+            mTermuxService.unsetTermuxTerminalSessionClient(mTermuxTerminalSessionActivityClient);
             mTermuxService = null;
         }
 

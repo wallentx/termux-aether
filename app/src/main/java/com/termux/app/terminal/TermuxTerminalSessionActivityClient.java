@@ -54,6 +54,9 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         this.mActivity = activity;
     }
 
+    /** Used by delayed service unbind cleanup to avoid detaching a replacement activity. */
+    public boolean isActivityDestroyed() { return mActivity.isDestroyed(); }
+
     /**
      * Should be called when mActivity.onCreate() is called
      */
