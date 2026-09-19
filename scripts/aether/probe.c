@@ -42,6 +42,9 @@ static void *system_thread(void *unused) {
     (void)unused; int status=system("exit 29");
     assert(WIFEXITED(status) && WEXITSTATUS(status)==29);return NULL;
 }
+static void *cancelled_system_thread(void *command) {
+    system(command);return NULL;
+}
 static void check_execution(const char *self) {
     const char *tmp=getenv("TMPDIR");assert(tmp && *tmp);
     char directory[PATH_MAX];assert(snprintf(directory,sizeof(directory),"%s/aether-exec-XXXXXX",tmp)<(int)sizeof(directory));
@@ -90,7 +93,12 @@ static void check_execution(const char *self) {
     if(!pid) {execvp("raw-script",args);_exit(125);}wait_code(pid,41);
     assert(posix_spawnp(&pid,"raw-script",NULL,NULL,args,environ)==ENOEXEC);
     assert(posix_spawnp(&pid,"missing-aether-command",NULL,NULL,args,environ)==ENOENT);
-    puts("Shell/env shebangs, mixed-libc children, recursion and permission errors passed");
+    errno=EDOM;
+    assert(posix_spawnp(&pid,"not-executable",NULL,NULL,args,environ)==EACCES && errno==EDOM);
+    assert(!unlink(envscript));
+    assert(asprintf(&body,"#!%s --script-child with spaces\n",self)>=0);
+    write_script(envscript,body,0700);free(body);run_path(envscript,43);
+    puts("Shell/env/glibc shebangs, mixed-libc children, recursion and permission errors passed");
     int status=system("\"$AETHER_PROBE_FILE\" --child");assert(WIFEXITED(status) && WEXITSTATUS(status)==37);
     assert(system(NULL));
     status=system("exit 23");assert(WIFEXITED(status) && WEXITSTATUS(status)==23);
@@ -99,11 +107,23 @@ static void check_execution(const char *self) {
     assert(!pthread_create(&threads[0],NULL,system_thread,NULL));
     assert(!pthread_create(&threads[1],NULL,system_thread,NULL));
     assert(!pthread_join(threads[0],NULL));assert(!pthread_join(threads[1],NULL));
-    puts("system shell, mixed-libc child, exit status, signal status and concurrent calls passed");
+    char marker[PATH_MAX];assert(snprintf(marker,sizeof(marker),"%s/system-child",directory)<(int)sizeof(marker));
+    char *command;assert(asprintf(&command,"echo $$ > '%s'; exec sleep 30",marker)>=0);
+    pthread_t cancel_thread;assert(!pthread_create(&cancel_thread,NULL,cancelled_system_thread,command));
+    FILE *child_file=NULL;
+    for(int i=0;i<100 && !child_file;i++) {usleep(20000);child_file=fopen(marker,"r");}
+    assert(child_file);long child_pid=0;assert(fscanf(child_file,"%ld",&child_pid)==1 && child_pid>0);fclose(child_file);
+    assert(!pthread_cancel(cancel_thread));void *cancel_result;assert(!pthread_join(cancel_thread,&cancel_result));
+    assert(cancel_result==PTHREAD_CANCELED);assert(kill((pid_t)child_pid,0)==-1 && errno==ESRCH);
+    assert(!unlink(marker));free(command);
+    puts("system shell, mixed-libc child, exit/signal status, concurrency and cancellation passed");
     assert(!unlink(binary));assert(!unlink(script));assert(!unlink(envscript));assert(!unlink(raw));assert(!unlink(loop));assert(!unlink(noscript));assert(!rmdir(directory));
     if(old_path) {setenv("PATH",old_path,1);free(old_path);}else unsetenv("PATH");
 }
 int main(int argc,char **argv) {
+    if(argc>1 && !strcmp(argv[1],"--script-child with spaces")) {
+        assert(argc==4 && !strcmp(argv[3],"argument with spaces"));return 43;
+    }
     if(argc>1 && !strcmp(argv[1],"--child")) {
         if(getenv("PROBE_ENV")) {assert(!strcmp(getenv("PROBE_ENV"),"kept"));assert(!getenv("HOME"));}
         if(!strcmp(argv[0],"preserved argv zero")) assert(getenv("AETHER_TARGET"));

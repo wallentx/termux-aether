@@ -16,6 +16,7 @@ static unsigned system_users;
 static struct sigaction saved_int, saved_quit;
 struct system_call { pid_t child; sigset_t mask; };
 static void finish_system(void *ptr) {
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
     struct system_call *call = ptr;
     if (call->child > 0) {
         kill(call->child, SIGKILL);
@@ -54,8 +55,9 @@ int system(const char *command) {
         posix_spawnattr_setsigmask(&attr, &call.mask);
         posix_spawnattr_setsigdefault(&attr, &defaults);
         posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF);
-        char *args[] = {"sh", "-c", (char *)(command ? command : "exit 0"), NULL};
+        char *args[] = {"sh", "-c", "--", (char *)(command ? command : "exit 0"), NULL};
         error = posix_spawn(&call.child, "/data/data/com.termux/files/usr/bin/sh", NULL, &attr, args, environ);
+        if (error) call.child = -1;
         posix_spawnattr_destroy(&attr);
     }
     pthread_setcancelstate(cancel_state, NULL);
