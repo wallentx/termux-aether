@@ -1,6 +1,9 @@
 # Pixel 11 feature integration plan
 
-Status: API 37 default APK built successfully in CI and installed by the user;
+Latest status: see the September 19 checkpoint below; older unchecked entries are
+original acceptance criteria, not a current completion checklist.
+
+Initial status: API 37 default APK built successfully in CI and installed by the user;
 basic use works. Broader workload checks remain open. Run the
 [device validation script](PIXEL11_VALIDATION.md) to collect results.
 Device baseline verified on 2026-09-16; install confirmed on 2026-09-17.
@@ -373,3 +376,27 @@ CI-built scalar/NEON/SVE2 byte-difference benchmark. See
 [the validation guide](PIXEL11_VALIDATION.md#explicit-scalar--neon--sve2-benchmark)
 for correctness checks and measurement limits. This measures one explicit kernel,
 not optimized dispatch throughout the installed package collection.
+
+## Implementation checkpoint: 2026-09-19
+
+The terminal redraw regression is fixed in `ab792707`, with callback-ownership
+regressions passing in CI and live typing/counter/rotation checks passing on the
+Pixel. Sixel row batching, text-buffer bulk operations, printable ASCII batching,
+image draw batching and native bitmap-copy improvements are already implemented.
+
+| Current work | State |
+| --- | --- |
+| Arch session lifetime | API `c49ea73`, CLI `157bfa6`: last-session clean shutdown and optional `--keep-memory` suspension verified on Pixel, including overlapping sessions, RAM-state retention, unchanged VM ID on resume, and HTTPS after resume. |
+| Native glibc compatibility | Full Geekbench CPU run completed as native app UID 10445 without rish/Arch; result 402547. Identity, DNS, execve and posix_spawn probes pass. General Linux compatibility is not claimed; PATH exec, scripts and other runtime cases remain outside the prototype's current coverage. |
+| Live Termux project sharing | CLI `3a95078`: `termux-arch-share LOCAL /mnt/project` uses rclone SFTP stdio and guest SSHFS over the existing authenticated SSH/vsock channel. Pixel read/write/new-file visibility/unmount tests pass. A share counts as active use and prevents idle shutdown. |
+| Sparse disk growth and live RAM | API `60018b9` and CLI `3a95078` build/tests pass; APK and commands installed. `--grow-disk SIZE` and `--memory-live SIZE` still await device validation after Shizuku reconnection. No automatic pressure-based RAM policy is enabled. |
+| Repeatable performance checks | Native Geekbench validation and package-dispatch runners save persistent results and thermal/power metadata. Pixel SHA-256 comparison passed (matching results; normal dispatch 1297 MiB/s vs disabled 213 MiB/s in this run). A fresh visible rendering run remains pending. |
+
+Live sharing requires Termux `rclone` and guest `sshfs`, now installed on this
+Pixel. Symlinks are omitted and Unix metadata/locking are not fully native; keep
+build trees on guest ext4. The share serves the selected directory without a new
+listening socket. See the CLI fork README for lifetime and caching semantics.
+
+The September 19 native Geekbench run was charging and ended with light thermal
+throttling. Its score cannot isolate glibc, AVF or rish overhead relative to the
+earlier runs. A matched comparison still needs the user's planned PRoot install.

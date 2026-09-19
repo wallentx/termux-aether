@@ -198,3 +198,18 @@ Remaining manual checks are included in every JSON report: session persistence,
 notification actions, shared storage, LAN SSH, package installation/update,
 and normal agent workloads. AVF and other unimplemented
 features are not counted as passing.
+
+## Native package dispatch regression
+
+Run `python scripts/pixel-validate/package_benchmark.py` in native Termux, or
+`termux-package-benchmark` when installed on PATH. It checks known-answer SHA-256,
+alternates normal OpenSSL dispatch with a capability-mask override confined to
+child processes, verifies identical digests, and records raw samples, medians,
+library identity, battery and thermal state. It also verifies a zlib round trip.
+Reports are written under `~/benchmarks/` and survive reboot. The default uses five
+pairs of 64 MiB inputs with eight hashes per child. No packages are rebuilt.
+
+This checks one installed package operation. ARM SHA instructions are distinct
+from general NEON/SVE SIMD; neither a CPU feature flag nor this result proves that
+other packages dispatch to their optimized kernels. Use the rendering collector
+for end-to-end terminal latency, with the terminal visible and consistent input.

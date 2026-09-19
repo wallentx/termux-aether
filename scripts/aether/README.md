@@ -53,3 +53,23 @@ provenance. The prototype APK is not intended for publishing through ordinary
 release workflows until equivalent source distribution is wired there.
 The preload and launcher sources in this directory use the repository's license;
 the glibc libraries retain their upstream licenses. See COPYING.LIB and LICENSES.
+
+## Repeatable installed-runtime validation
+
+Run `python scripts/aether/validate.py --cpu` from a native Termux session, or
+`aether-validate --cpu` when the script is installed on PATH. `--probe` selects the
+CI-built probe binary; `--geekbench` selects an existing Geekbench binary. The
+probe and Geekbench are not downloaded by the runner. Omit `--cpu` for the short
+identity/DNS/child-process checks and Geekbench system information.
+
+Reports and logs default to a fresh `~/benchmarks/aether-YYYYMMDD-HHMMSS/`
+directory. They include actual UID/SELinux context, exit codes, wall time, and
+battery/thermal snapshots before and after the run. Geekbench preview uploads
+its CPU results. Run comparisons under matched charging and thermal conditions.
+
+Pixel validation on 2026-09-19: all probes, system information and the full CPU
+benchmark passed under app UID 10445 (`untrusted_app`), without rish or an Arch VM.
+The CPU run took 414.5 seconds: https://browser.geekbench.com/v7/cpu/402547 . The
+phone was charging; battery temperature went from 37.5 C to 39.3 C and Android
+reported light throttling at the end. This establishes compatibility, not an
+apples-to-apples performance comparison with earlier VM or shell runs.
