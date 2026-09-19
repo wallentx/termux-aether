@@ -43,7 +43,7 @@ static void *system_thread(void *unused) {
     assert(WIFEXITED(status) && WEXITSTATUS(status)==29);return NULL;
 }
 static void *cancelled_system_thread(void *command) {
-    system(command);return NULL;
+    int status=system(command);assert(status!=-1);return NULL;
 }
 static void check_execution(const char *self) {
     const char *tmp=getenv("TMPDIR");assert(tmp && *tmp);
