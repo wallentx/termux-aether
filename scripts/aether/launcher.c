@@ -47,32 +47,40 @@ static int resolve(int argc, char **argv) {
     freeaddrinfo(head); return 0;
 }
 int main(int argc,char **argv) {
+    extern char **environ;
+    if(argc >= 4 && !strcmp(argv[1], "--bionic")) {
+        execve(argv[2], argv + 3, environ);
+        perror("aether Android child"); return 126;
+    }
     if(argc>1 && !strcmp(argv[1],"--resolve")) return resolve(argc,argv);
     if(argc<2 || !strcmp(argv[1],"--help")) {
-        puts("Usage: aether-run [--] /path/to/linux-aarch64-program [arguments...]\nExperimental glibc execution under the Termux app UID, without rish."); return argc<2?2:0;
+        puts("Usage: aether-run [--] PROGRAM [arguments...]\nExperimental glibc execution under the Termux app UID, without rish."); return argc<2?2:0;
     }
     int first=!strcmp(argv[1],"--")?2:1;
     if(first>=argc) return 2;
-    char self[PATH_MAX], target[PATH_MAX], loader[PATH_MAX], preload[PATH_MAX], libraries[PATH_MAX];
+    char self[PATH_MAX], loader[PATH_MAX], preload[PATH_MAX], libraries[PATH_MAX];
     ssize_t n=readlink("/proc/self/exe",self,sizeof(self)-1);
     if(n<0 || n==(ssize_t)sizeof(self)-1) { perror("aether executable path"); return 1; } self[n]=0;
     char *slash=strrchr(self,'/'); if(!slash) return 1; *slash=0;
     const char *runtime=getenv("AETHER_RUNTIME");
     if(!runtime || !*runtime) { fputs("aether-run: reopen Termux to install the runtime\n",stderr); return 1; }
-    if(!realpath(argv[first],target)) { perror(argv[first]); return 1; }
     snprintf(loader,sizeof(loader),"%s/libaether-loader.so",self);
     snprintf(preload,sizeof(preload),"%s/libaether-compat.so",runtime);
     snprintf(libraries,sizeof(libraries),"%s:/data/data/com.termux/files/usr/glibc/lib",runtime);
     char helper[PATH_MAX]; snprintf(helper,sizeof(helper),"%s/libaether-run.so",self);
-    setenv("AETHER_HELPER",helper,1); setenv("AETHER_LOADER",loader,1); setenv("AETHER_TARGET",target,1);
+    char *bionic_preload=NULL;
+    const char *inherited=getenv("LD_PRELOAD");
+    if(asprintf(&bionic_preload,"%s/libaether-exec.so%s%s",self,
+                inherited && *inherited ? ":" : "", inherited ? inherited : "")<0) return 1;
+    const char *bionic_libraries=getenv("LD_LIBRARY_PATH");
+    if(bionic_libraries) setenv("AETHER_BIONIC_LIBRARY_PATH",bionic_libraries,1);
+    else unsetenv("AETHER_BIONIC_LIBRARY_PATH");
+    setenv("AETHER_BIONIC_PRELOAD",bionic_preload,1); free(bionic_preload);
+    setenv("AETHER_GLIBC_PRELOAD",preload,1);
+    setenv("AETHER_HELPER",helper,1); setenv("AETHER_LOADER",loader,1);
     setenv("AETHER_LIBRARIES",libraries,1); setenv("LD_PRELOAD",preload,1); setenv("LD_LIBRARY_PATH",libraries,1);
     setenv("SSL_CERT_FILE","/data/data/com.termux/files/usr/etc/tls/cert.pem",1);
     setenv("CURL_CA_BUNDLE","/data/data/com.termux/files/usr/etc/tls/cert.pem",1);
-    char **next=calloc((size_t)argc+5,sizeof(char*)); if(!next) return 1;
-    next[0]=loader; next[1]="--library-path"; next[2]=libraries;
-    for(int i=first;i<argc;i++) next[3+i-first]=i==first?target:argv[i];
-    extern char **environ;
-    /* Do not let the inherited Bionic termux-exec preload select Android's linker. */
-    syscall(SYS_execve,loader,next,environ);
-    perror("aether glibc loader"); free(next); return 126;
+    execvp(argv[first], argv + first);
+    int error=errno; perror("aether-run"); return error == ENOENT ? 127 : 126;
 }

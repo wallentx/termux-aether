@@ -6,7 +6,7 @@ of direct app-UID execution, not a general Linux distribution or sandbox.
 
 The prototype APK contains an executable glibc loader in Android's installed
 native-library directory, matching Android-adapted glibc 2.44-0 libraries, and a
-Bionic helper. `aether-run /absolute/path/to/linux-aarch64-program [arguments]`
+Bionic helper. `aether-run PROGRAM [arguments]`
 uses the installed loader directly, bypassing the Bionic termux-exec interceptor.
 The runtime is installed privately at `$HOME/../aether`; package-managed files
 under `$PREFIX/glibc` are unchanged and supply optional dependencies such as
@@ -29,12 +29,38 @@ this preload's coverage. Do not claim universal `/etc` virtualization.
 The preload also makes readlink(/proc/self/exe) report the requested program,
 so programs such as Geekbench locate sibling assets. execve, execv, and
 posix_spawn of dynamic Linux/AArch64 ELF children are routed through the same
-loader. PATH-searching exec functions, script interpreters, system(), arbitrary
-Bionic subprocesses, and environments that remove the compatibility variables
-are not yet covered. Existing syscall and filesystem constraints still apply.
+loader. PATH-based `execvp`/`execvpe`/`posix_spawnp`, variadic exec calls,
+shebang scripts, and glibc `system()` use the same dispatcher. `/bin/sh`,
+`/bin/bash`, and `/usr/bin/env` shebangs map to Termux tools; other interpreters
+must exist at their stated paths. `env` shebangs can find an interpreter on PATH.
+The launcher itself accepts PATH names and scripts as well as ELF paths.
+
+Android children run with a separate Bionic execution shim plus the launcher's
+original Termux preload. Their children can switch back to glibc. The glibc
+preload never enters a Bionic process. Child environments preserve ordinary
+caller-supplied variables; reserved `AETHER_*` runtime settings and ABI-specific
+`LD_PRELOAD`/`LD_LIBRARY_PATH` values are supplied by the dispatcher even with
+an explicit custom environment. Runtime variables are not a security boundary.
+
+`execvp`/`execvpe` implement shell fallback for executable text without a
+shebang; `posix_spawnp` reports `ENOEXEC` instead. PATH comes from the calling
+process (including for `execvpe`), with empty entries denoting its current
+working directory. Execution mode bits are checked before invoking a loader.
+`system()` preserves wait status, ignores SIGINT/SIGQUIT while waiting, and
+handles concurrent calls and deferred thread cancellation.
+
+Limits: spawn executable resolution currently occurs before file actions, so
+relative executable/PATH lookup combined with spawn chdir/fchdir actions is not
+supported. Use an absolute executable path for such calls. Direct syscalls,
+`execveat`/`fexecve`, libc-internal launches such as `popen()`, static executables,
+async-signal-safe post-fork execution, and programs that deliberately remove or
+replace the shim are not covered. Existing Android syscall and filesystem
+constraints still apply. This is not general `/usr` or `/bin` virtualization.
 
 `aether-probe` checks app UID, executable identity, resolv.conf visibility,
-Android manufacturer/model files, Android-backed DNS success/failure/numeric cases, and execve/posix_spawn children.
+Android manufacturer/model files, Android-backed DNS success/failure/numeric cases, PATH/variadic exec and spawn
+children, mixed glibc/Bionic scripts, permission/recursion errors, and system()
+exit/signal/concurrency behavior.
 Run it in a native Termux session, not ADB shell or run-as, to validate SDK-37
 execution restrictions. Then validate Geekbench --sysinfo and a real HTTPS
 client. A successful probe is not a benchmark or evidence of a performance gain.
@@ -73,3 +99,6 @@ The CPU run took 414.5 seconds: https://browser.geekbench.com/v7/cpu/402547 . Th
 phone was charging; battery temperature went from 37.5 C to 39.3 C and Android
 reported light throttling at the end. This establishes compatibility, not an
 apples-to-apples performance comparison with earlier VM or shell runs.
+
+The expanded child-process dispatcher is under validation; the September 19
+Geekbench result above validates the earlier explicit execve/posix_spawn path.

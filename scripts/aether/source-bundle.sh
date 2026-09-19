@@ -8,4 +8,4 @@ curl --fail --location --retry 3 \
   https://api.github.com/repos/termux-pacman/glibc-packages/tarball/c2b00b9e5c58d87f548b1793149d389f48bf9bc5 \
   -o "$out/termux-glibc-recipes-c2b00b9e.tar.gz"
 cp app/src/aether/assets/aether/{COPYING.LIB,LICENSES,provenance.json} "$out/"
-cp scripts/aether/{launcher.c,compat.c,probe.c,build.sh,source-bundle.sh,README.md} "$out/"
+cp scripts/aether/{launcher.c,compat.c,exec.c,system.c,probe.c,build.sh,source-bundle.sh,README.md} "$out/"
