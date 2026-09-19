@@ -12,6 +12,7 @@ mkdir -p "$out/assets/aether" "$out/jniLibs/arm64-v8a" "$out/probes"
 aarch64-linux-gnu-gcc -std=c11 -O2 -Wall -Wextra -Werror -Wno-nonnull-compare \
   -fPIC -shared scripts/aether/compat.c scripts/aether/exec.c scripts/aether/system.c -pthread -ldl -o "$out/assets/aether/libaether-compat.so"
 aarch64-linux-gnu-gcc -std=c11 -O2 -Wall -Wextra -Werror scripts/aether/probe.c -pthread -o "$out/probes/aether-probe"
+cp "$out/probes/aether-probe" "$out/assets/aether/aether-probe"
 python3 - "$out" <<'PY'
 import hashlib,json,pathlib,sys
 source=pathlib.Path('app/src/aether/assets/aether')

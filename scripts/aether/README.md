@@ -102,3 +102,14 @@ apples-to-apples performance comparison with earlier VM or shell runs.
 
 The expanded child-process dispatcher is under validation; the September 19
 Geekbench result above validates the earlier explicit execve/posix_spawn path.
+
+The prototype APK also installs its matching probe with executable permissions.
+After updating and reopening Termux, run:
+
+```sh
+aether-run "$HOME/../aether/aether-probe"
+```
+
+This needs no separate probe download and performs no CPU benchmark or upload.
+The full validation runner can select it with
+`aether-validate --probe "$HOME/../aether/aether-probe"`.

@@ -31,7 +31,8 @@ final class BundledAetherInstaller {
                     byte[] buffer = new byte[8192];
                     int count;
                     while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count);
-                    BundledRishInstaller.installFile(new File(runtime, name), bytes.toByteArray(), false);
+                    BundledRishInstaller.installFile(new File(runtime, name), bytes.toByteArray(),
+                        name.equals("aether-probe"));
                 }
             }
             // Linux programs commonly identify hardware through DMI sysfs files,
