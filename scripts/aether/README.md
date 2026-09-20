@@ -134,14 +134,14 @@ and the full execution probe reports `AETHER_PROBE_PASS`.
 The Geekbench result above validates the earlier explicit execve/posix_spawn path.
 
 Default-package validation: the ordinary push build of `5e2f349c`
-([CI 35480561298](https://github.com/wallentx/termux-app/actions/runs/35480561298))
+([CI 35480561298](https://github.com/wallentx/termux-aether/actions/runs/35480561298))
 produced one ARM64 APK and a matching source archive. After installing that APK
 on the Pixel 11, its bundled probe passed under native UID 10445 in
 `untrusted_app`, with target SDK 37; the wrapped `env` check returned 43.
 The previous benchmark report survived the update byte-for-byte. Results are
 saved on-device at `~/benchmarks/aether-default-5e2f349c/probe.json`.
 The explicit opt-out build
-([CI 35480576689](https://github.com/wallentx/termux-app/actions/runs/35480576689))
+([CI 35480576689](https://github.com/wallentx/termux-aether/actions/runs/35480576689))
 also passed and verified that its APK contains no Aether payload. Unit tests
 passed in CI `35480561311`. Release-source publication is configured and
 statically checked; no release was published for this validation.

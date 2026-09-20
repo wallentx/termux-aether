@@ -43,7 +43,7 @@ is fixed: release the cwd UTF string with its matching Java string handle.
 - Daily builds need a persistent private key shared with signature-authenticated
   companion apps. Existing sharedUserId is retained in this probe; migration to
   separate UIDs needs a deliberate install/backup strategy before daily use.
-- Android bridge source: [wallentx/termux-api](https://github.com/wallentx/termux-api),
+- Android bridge source: [wallentx/termux-api](https://github.com/wallentx/termux-aether-api),
   forked from current upstream. CLI source:
   [wallentx/termux-api-package](https://github.com/wallentx/termux-api-package), also
   forked from upstream. Neither has bridge implementation changes yet.

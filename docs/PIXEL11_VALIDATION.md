@@ -19,7 +19,7 @@ python3 scripts/pixel-validate/validate.py --bench --sixel
 Alternatively, download the single script and run it:
 
 ```sh
-curl -fLo termux-validate.py https://raw.githubusercontent.com/wallentx/termux-app/dev/scripts/pixel-validate/validate.py
+curl -fLo termux-validate.py https://raw.githubusercontent.com/wallentx/termux-aether/dev/scripts/pixel-validate/validate.py
 python3 termux-validate.py --bench --sixel
 ```
 
