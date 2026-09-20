@@ -106,8 +106,12 @@ using extracted CI binaries, without local compilation or installing an APK.
 This includes glibc shebang optional arguments, preserved argv0, and cancellation
 that reaps the system() shell. Antigravity's installed `agy.va39` 1.2.0 passed
 `--version` and `--help` through the earlier `7853f2fa` launcher; this does not
-validate an authenticated agent workload or its updater. Pixel 11 verification
-of this expanded dispatcher remains pending wireless ADB connectivity.
+validate an authenticated agent workload or its updater. Pixel 11 verification subsequently passed with `8f56aa0d` (CI `35478113494`),
+under native app UID 10445 and target SDK 37. Its Pacman `env -> coreutils`
+symlink exposed an Android handoff bug: resolving Bionic paths to their final
+binary lost the applet name. The dispatcher now preserves the invoked Bionic
+path. Both native `env sh -c 'exit 43'` and the Aether equivalent return 43,
+and the full execution probe reports `AETHER_PROBE_PASS`.
 The Geekbench result above validates the earlier explicit execve/posix_spawn path.
 
 The prototype APK also installs its matching probe with executable permissions.
