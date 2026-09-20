@@ -97,6 +97,11 @@ jobs:
           done
 
           for apk in "${apk_files[@]}"; do
+            expected_code=$(sed -n 's/^[[:space:]]*versionCode \([0-9]*\)$/\1/p' app/build.gradle)
+            test -n "$expected_code" || exit_on_error "Missing versionCode"
+            apkanalyzer manifest application-id "$APK_DIR_PATH/$apk" | grep -Fx 'com.termux' || exit_on_error "Wrong application ID"
+            apkanalyzer manifest version-code "$APK_DIR_PATH/$apk" | grep -Fx "$expected_code" || exit_on_error "Wrong versionCode"
+            apkanalyzer manifest version-name "$APK_DIR_PATH/$apk" | grep -Fx "${RELEASE_VERSION_NAME/v/}" || exit_on_error "Wrong versionName"
             "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs "$APK_DIR_PATH/$apk" > "$RUNNER_TEMP/apk-cert.txt" || exit_on_error "APK signature verification failed"
             grep -qi 'certificate SHA-256 digest: b6da01480eefd5fbf2cd3771b8d1021ec791304bdd6c4bf41d3faabad48ee5e1' "$RUNNER_TEMP/apk-cert.txt" || exit_on_error "Unexpected signing certificate"
           done
