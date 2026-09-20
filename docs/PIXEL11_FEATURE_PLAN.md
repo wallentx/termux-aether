@@ -70,7 +70,7 @@ Shizuku provides shell-level capabilities when started through ADB; it does not
 give ordinary app processes root access or unrestricted access to app-private data.
 
 The Android bridge now has the fork `wallentx/termux-aether-api`, based on current upstream
-`termux/termux-api`. The matching CLI fork is `wallentx/termux-api-package`.
+`termux/termux-api`. The matching CLI fork is `wallentx/termux-aether-api-package`.
 `wallentx/Termux-api-bluetooth` is an older CLI-package fork, not the proposed
 Android bridge base. Both new forks were created when implementation began.
 
@@ -353,7 +353,7 @@ not optimized library dispatch or a measured SIMD speedup.
 
 The next bridge slice is implemented on `wallentx/capabilities` in both
 [termux-api](https://github.com/wallentx/termux-aether-api/tree/wallentx/capabilities) and
-[termux-api-package](https://github.com/wallentx/termux-api-package/tree/wallentx/capabilities).
+[termux-api-package](https://github.com/wallentx/termux-aether-api-package/tree/dev).
 `termux-capabilities --json` combines Android permissions, ARM64 capabilities,
 battery/thermal observations and Shizuku connection/authorization state. It does
 not request privileges or execute privileged operations. See the

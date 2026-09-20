@@ -1,7 +1,9 @@
 # Termux-Æther
 
-[![Build](https://github.com/wallentx/termux-aether/actions/workflows/debug_build.yml/badge.svg?branch=dev)](https://github.com/wallentx/termux-aether/actions/workflows/debug_build.yml?query=branch%3Adev)
-[![Tests](https://github.com/wallentx/termux-aether/actions/workflows/run_tests.yml/badge.svg?branch=dev)](https://github.com/wallentx/termux-aether/actions/workflows/run_tests.yml?query=branch%3Adev)
+Coordinated suite releases: [installation, upgrades and component dependencies](https://github.com/wallentx/termux-aether-app/blob/dev/docs/RELEASES.md). The `v1000.0.0` baseline keeps existing app IDs and data paths.
+
+[![Build](https://github.com/wallentx/termux-aether-app/actions/workflows/debug_build.yml/badge.svg?branch=dev)](https://github.com/wallentx/termux-aether-app/actions/workflows/debug_build.yml?query=branch%3Adev)
+[![Tests](https://github.com/wallentx/termux-aether-app/actions/workflows/run_tests.yml/badge.svg?branch=dev)](https://github.com/wallentx/termux-aether-app/actions/workflows/run_tests.yml?query=branch%3Adev)
 
 A Termux fork for modern Android: a Pacman-based terminal, a bundled Linux/glibc
 compatibility runtime, and an optional hardware-virtualized Arch workspace.
@@ -10,7 +12,7 @@ Development and device testing focus on the **Pixel 11 Pro XL running Android 17
 Built on [Termux](https://github.com/termux/termux-app) and
 [Termux Monet](https://github.com/HardcodedCat/termux-monet), with downstream
 compatibility fixes and measured terminal optimizations. This is an independent
-fork; report fork-specific issues [here](https://github.com/wallentx/termux-aether/issues).
+fork; report fork-specific issues [here](https://github.com/wallentx/termux-aether-app/issues).
 
 ## What sets it apart
 
@@ -40,7 +42,7 @@ fork; report fork-specific issues [here](https://github.com/wallentx/termux-aeth
 | --- | --- |
 | Terminal app, Monet theming, Pacman bootstrap | Included in the default ARM64 APK |
 | Aether glibc 2.44 runtime, `aether-run`, and execution probe | Included and installed when Termux opens |
-| Device capabilities, thermal diagnostics, Shizuku access, and Arch VM control | Separate [Termux-Æther:API companion](https://github.com/wallentx/termux-aether-api) and [CLI package](https://github.com/wallentx/termux-api-package/tree/wallentx/capabilities) |
+| Device capabilities, thermal diagnostics, Shizuku access, and Arch VM control | Separate [Termux-Æther:API companion](https://github.com/wallentx/termux-aether-api) and [CLI package](https://github.com/wallentx/termux-aether-api-package/tree/dev) |
 | Arch kernel/root filesystem and networking helper | Separate guest artifact and setup; not embedded in the terminal APK |
 | Validation scripts and benchmark harnesses | In this repository and CI artifacts; optional tools and Geekbench are not bundled |
 
@@ -73,7 +75,7 @@ matched AVF-versus-PRoot speedup has been established.
 ## Install
 
 1. Download the ARM64 APK from a successful
-   [Build run on `dev`](https://github.com/wallentx/termux-aether/actions/workflows/debug_build.yml?query=branch%3Adev+event%3Apush).
+   [Build run on `dev`](https://github.com/wallentx/termux-aether-app/actions/workflows/debug_build.yml?query=branch%3Adev+event%3Apush).
    GitHub requires sign-in to download Actions artifacts. Normal builds produce
    one `pacman-android-7` ARM64 APK, checksums, and matching Aether sources.
 2. Install the APK. The Android package remains `com.termux`, so an update with a

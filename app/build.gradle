@@ -66,9 +66,9 @@ android {
     defaultConfig {
         minSdkVersion pixelProbe ? 37 : project.properties.minSdkVersion.toInteger()
         targetSdkVersion pixelProbe ? 37 : project.properties.targetSdkVersion.toInteger()
-        // Avoid update offers for the differently signed Play build (141 on 2026-09-18).
-        versionCode 1000
-        versionName "0.118.0"
+        // Reserve a high fork version range while leaving room for future upgrades.
+        versionCode 1000000000
+        versionName "1000.0.0"
 
         if (appVersionName) versionName = appVersionName
         validateVersionName(versionName)
@@ -175,10 +175,10 @@ android {
         variant.outputs.all { output ->
             if (variant.buildType.name == "debug") {
                 def abi = output.getFilter(com.android.build.OutputFile.ABI) ?: (arm64Only ? 'arm64-v8a' : null)
-                outputFileName = new File("termux-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "debug") + "_" + (abi ? abi : "universal") + ".apk")
+                outputFileName = new File("termux-aether-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "debug") + "_" + (abi ? abi : "universal") + ".apk")
             } else if (variant.buildType.name == "release") {
                 def abi = output.getFilter(com.android.build.OutputFile.ABI) ?: (arm64Only ? 'arm64-v8a' : null)
-                outputFileName = new File("termux-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "release") + "_" + (abi ? abi : "universal") + ".apk")
+                outputFileName = new File("termux-aether-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "release") + "_" + (abi ? abi : "universal") + ".apk")
             }
         }
     }

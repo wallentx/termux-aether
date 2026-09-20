@@ -45,7 +45,7 @@ is fixed: release the cwd UTF string with its matching Java string handle.
   separate UIDs needs a deliberate install/backup strategy before daily use.
 - Android bridge source: [wallentx/termux-api](https://github.com/wallentx/termux-aether-api),
   forked from current upstream. CLI source:
-  [wallentx/termux-api-package](https://github.com/wallentx/termux-api-package), also
+  [wallentx/termux-aether-api-package](https://github.com/wallentx/termux-aether-api-package), also
   forked from upstream. Neither has bridge implementation changes yet.
 - Planned transport: signature-protected Android IPC, with separately authenticated
   guest requests. AVF and Shizuku are later adapters, not required for this probe.

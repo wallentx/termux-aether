@@ -61,9 +61,10 @@ jobs:
 
           APK_DIR_PATH="./app/build/outputs/apk/debug"
           APK_VERSION_TAG="$RELEASE_VERSION_NAME+${{ env.PACKAGE_VARIANT }}-github-debug"
-          APK_BASENAME_PREFIX="termux-app_$APK_VERSION_TAG"
+          APK_BASENAME_PREFIX="termux-aether-app_$APK_VERSION_TAG"
 
           echo "Building APKs for 'APK_VERSION_TAG' release"
+          export TERMUX_APP_VERSION_NAME="${RELEASE_VERSION_NAME/v/}"
           export TERMUX_APK_VERSION_TAG="$APK_VERSION_TAG" # Used by app/build.gradle
           export TERMUX_PACKAGE_VARIANT="${{ env.PACKAGE_VARIANT }}" # Used by app/build.gradle
           build_profile=pixel11
@@ -93,6 +94,11 @@ jobs:
               --enabled "$AETHER_ENABLED" --source-archive "$RUNNER_TEMP/aether-source.tar.gz"; then
               exit_on_error "Aether package/source verification failed."
             fi
+          done
+
+          for apk in "${apk_files[@]}"; do
+            "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs "$APK_DIR_PATH/$apk" > "$RUNNER_TEMP/apk-cert.txt" || exit_on_error "APK signature verification failed"
+            grep -qi 'certificate SHA-256 digest: b6da01480eefd5fbf2cd3771b8d1021ec791304bdd6c4bf41d3faabad48ee5e1' "$RUNNER_TEMP/apk-cert.txt" || exit_on_error "Unexpected signing certificate"
           done
 
           # Publish the matching source archive before making its APK available.
