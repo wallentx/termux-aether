@@ -12,27 +12,37 @@ spec.loader.exec_module(capture)
 
 
 class CaptureTest(unittest.TestCase):
-    def run_capture(self, metadata, empty_frames=False):
+    def run_capture(self, metadata, empty_frames=False, delayed_start=False):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         output = Path(directory.name) / 'report'
-        phases = iter(name for name in ('text_scroll', 'image_redraw', 'image_replace')
-                      for _ in range(2))
-        state_reads = 0
+        states = ('ready', 'running', 'done') if delayed_start else ('ready', 'done')
+        phases = iter((name, state) for name in ('text_scroll', 'image_redraw', 'image_replace')
+                      for state in states)
+        now = 0
         samples = 0
 
+        def monotonic():
+            nonlocal now
+            now += 1
+            return now
+
         def adb(args, **kwargs):
-            nonlocal state_reads, samples
+            nonlocal now, samples
             command = args[-1]
+            if 'gfxinfo com.termux reset' in command:
+                samples = 0
             if 'state.json' in command:
-                state_reads += 1
-                return json.dumps({'phase': next(phases),
-                                   'state': 'ready' if state_reads % 2 else 'done'})
+                phase, state = next(phases)
+                if delayed_start:
+                    # Ready within the documented window, then a 120-second phase.
+                    now += 100 if state == 'ready' else 60
+                return json.dumps({'phase': phase, 'state': state})
             if 'framestats' in command:
                 if empty_frames:
                     return ''
                 samples += 1
-                timestamp = ((samples - 1) % 3 + 1) * 100
+                timestamp = samples * 100
                 return ('---PROFILEDATA---\nFlags,IntendedVsync,FrameCompleted\n'
                         f'0,{timestamp},{timestamp + 50}\n---PROFILEDATA---')
             if 'result.json' in command:
@@ -41,7 +51,7 @@ class CaptureTest(unittest.TestCase):
 
         with patch.object(capture.subprocess, 'check_output', side_effect=adb), \
              patch.object(capture.time, 'sleep'), \
-             patch.object(capture.time, 'monotonic', side_effect=range(1000)), \
+             patch.object(capture.time, 'monotonic', side_effect=monotonic), \
              patch('sys.argv', ['capture.py', '--serial', 'fake', '--remote-dir', '/run',
                                 '--output', str(output)]):
             if empty_frames:
@@ -57,7 +67,8 @@ class CaptureTest(unittest.TestCase):
                 capture.main()
                 for phase in ('text_scroll', 'image_redraw', 'image_replace'):
                     frames = json.loads((output / (phase + '-frames.json')).read_text())
-                    self.assertEqual([200, 300], [frame['IntendedVsync'] for frame in frames])
+                    expected = [200, 300, 400] if delayed_start else [200, 300]
+                    self.assertEqual(expected, [frame['IntendedVsync'] for frame in frames])
                 self.assertEqual({'complete': True}, json.loads((output / 'workload.json').read_text()))
 
     def test_collects_tail_after_done(self):
@@ -68,6 +79,9 @@ class CaptureTest(unittest.TestCase):
 
     def test_hidden_display_fails_run(self):
         self.run_capture('{"complete": true}', empty_frames=True)
+
+    def test_late_ready_allows_full_length_phase(self):
+        self.run_capture('{"complete": true}', delayed_start=True)
 
 
 if __name__ == '__main__':

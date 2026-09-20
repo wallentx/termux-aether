@@ -996,11 +996,11 @@ public final class TerminalEmulator {
                             case 't': // "${CSI}${TOP}${LEFT}${BOTTOM}${RIGHT}${ATTRIBUTES}$t"
                                 // Reverse attributes in rectangular area (DECRARA - http://www.vt100.net/docs/vt510-rm/DECRARA).
                                 boolean reverse = b == 't';
-                                // FIXME: "coordinates of the rectangular area are affected by the setting of origin mode (DECOM)".
-                                int top = Math.min(getArg(0, 1, true) - 1, effectiveBottomMargin) + effectiveTopMargin;
-                                int left = Math.min(getArg(1, 1, true) - 1, effectiveRightMargin) + effectiveLeftMargin;
-                                int bottom = Math.min(getArg(2, mRows, true), effectiveBottomMargin) + effectiveTopMargin;
-                                int right = Math.min(getArg(3, mColumns, true), effectiveRightMargin) + effectiveLeftMargin;
+                                // Apply origin-mode offsets before clamping to the active region.
+                                int top = Math.min(getArg(0, 1, true) - 1 + effectiveTopMargin, effectiveBottomMargin);
+                                int left = Math.min(getArg(1, 1, true) - 1 + effectiveLeftMargin, effectiveRightMargin);
+                                int bottom = Math.min(getArg(2, mRows, true) + effectiveTopMargin, effectiveBottomMargin);
+                                int right = Math.min(getArg(3, mColumns, true) + effectiveLeftMargin, effectiveRightMargin);
                                 if (mArgIndex >= 4) {
                                     if (mArgIndex >= mArgs.length) mArgIndex = mArgs.length - 1;
                                     for (int i = 4; i <= mArgIndex; i++) {

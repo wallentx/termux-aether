@@ -53,9 +53,9 @@ def main():
     summaries = []
     (args.output / 'device.txt').write_text(adb('getprop ro.product.model; getprop ro.build.fingerprint; dumpsys package com.termux | grep versionName'))
     for phase in ('text_scroll', 'image_redraw', 'image_replace'):
-        deadline = time.monotonic() + 150
+        ready_deadline = time.monotonic() + 150
         while state() != {'phase': phase, 'state': 'ready'}:
-            if time.monotonic() > deadline:
+            if time.monotonic() > ready_deadline:
                 raise TimeoutError('Waiting for ' + phase)
             time.sleep(.25)
         (args.output / (phase + '-before-memory.txt')).write_text(adb('dumpsys meminfo com.termux'))
@@ -64,6 +64,7 @@ def main():
         previous = parse_frames(adb('dumpsys gfxinfo com.termux framestats'))
         cutoff = max(previous, default=0)
         touch(phase + '.go')
+        deadline = time.monotonic() + 150
         frames = {}
         while True:
             raw = adb('dumpsys gfxinfo com.termux framestats')
