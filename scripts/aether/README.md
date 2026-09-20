@@ -100,8 +100,15 @@ phone was charging; battery temperature went from 37.5 C to 39.3 C and Android
 reported light throttling at the end. This establishes compatibility, not an
 apples-to-apples performance comparison with earlier VM or shell runs.
 
-The expanded child-process dispatcher is under validation; the September 19
-Geekbench result above validates the earlier explicit execve/posix_spawn path.
+Expanded child-process validation: CI `35477346922` built `36e9fbd1`; the full
+execution probe passed on the development Pixel 8 Pro (Android API 37, UID 10514)
+using extracted CI binaries, without local compilation or installing an APK.
+This includes glibc shebang optional arguments, preserved argv0, and cancellation
+that reaps the system() shell. Antigravity's installed `agy.va39` 1.2.0 passed
+`--version` and `--help` through the earlier `7853f2fa` launcher; this does not
+validate an authenticated agent workload or its updater. Pixel 11 verification
+of this expanded dispatcher remains pending wireless ADB connectivity.
+The Geekbench result above validates the earlier explicit execve/posix_spawn path.
 
 The prototype APK also installs its matching probe with executable permissions.
 After updating and reopening Termux, run:
