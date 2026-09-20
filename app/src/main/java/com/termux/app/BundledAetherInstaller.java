@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
-/** Experimental, ARM64-only compatibility runtime enabled by the prototype build. */
+/** ARM64 compatibility runtime included by default in the Pixel build profile. */
 final class BundledAetherInstaller {
     private BundledAetherInstaller() {}
 
@@ -55,7 +55,7 @@ final class BundledAetherInstaller {
                 if (e.errno != OsConstants.EEXIST) throw e;
             }
         } catch (IOException | ErrnoException e) {
-            Logger.logError("BundledAetherInstaller", "Cannot install prototype runtime: " + e.getMessage());
+            Logger.logError("BundledAetherInstaller", "Cannot install Aether runtime: " + e.getMessage());
         }
     }
 }

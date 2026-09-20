@@ -7,6 +7,8 @@ on:
 
 jobs:
   attach-apks:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -15,6 +17,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_ALL_APKS: ${{ vars.TERMUX_BUILD_ALL_APKS == 'true' }}
+      AETHER_ENABLED: ${{ vars.TERMUX_BUILD_ALL_APKS != 'true' && vars.TERMUX_DISABLE_AETHER != 'true' }}
 
     steps:
       - name: Clone repository
@@ -34,6 +37,12 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - name: Install SDK and NDK
         run: sdkmanager 'platforms;android-37.2' 'build-tools;37.0.0' 'ndk;29.0.14206865'
+      - name: Prepare Aether toolchain and accompanying sources
+        if: env.AETHER_ENABLED == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          bash scripts/aether/source-bundle.sh "$RUNNER_TEMP/aether-source"
       - name: Build and attach APKs to release
         shell: bash {0}
         env:
@@ -41,9 +50,6 @@ jobs:
         run: |
           exit_on_error() {
               echo "$1"
-              echo "Deleting '$RELEASE_VERSION_NAME' release and '$GITHUB_REF' tag"
-              gh release delete "$RELEASE_VERSION_NAME" --yes
-              git push --delete origin "$GITHUB_REF"
               exit 1
           }
 
@@ -66,7 +72,7 @@ jobs:
               build_profile=all
               abis=(universal arm64-v8a armeabi-v7a x86_64 x86)
           fi
-          if ! ./gradlew :app:assembleDebug -PtermuxBuildProfile="$build_profile"; then
+          if ! ./gradlew :app:assembleDebug -PtermuxBuildProfile="$build_profile" -PaetherEnabled="$AETHER_ENABLED"; then
             exit_on_error "Build failed for '$APK_VERSION_TAG' release."
           fi
 
@@ -81,6 +87,21 @@ jobs:
             apk_files+=("${APK_BASENAME_PREFIX}_$abi.apk")
             release_files+=("$APK_DIR_PATH/${APK_BASENAME_PREFIX}_$abi.apk")
           done
+
+          for apk in "${apk_files[@]}"; do
+            if ! python3 scripts/aether/verify-package.py "$APK_DIR_PATH/$apk" \
+              --enabled "$AETHER_ENABLED" --source-archive "$RUNNER_TEMP/aether-source.tar.gz"; then
+              exit_on_error "Aether package/source verification failed."
+            fi
+          done
+
+          # Publish the matching source archive before making its APK available.
+          # A source upload failure must leave the release and tag intact for retry.
+          if [ "$AETHER_ENABLED" = "true" ]; then
+            source_asset="$RUNNER_TEMP/aether-source-${RELEASE_VERSION_NAME}-$(git rev-parse --short=12 HEAD).tar.gz"
+            cp "$RUNNER_TEMP/aether-source.tar.gz" "$source_asset" || exit_on_error "Source archive copy failed."
+            gh release upload "$RELEASE_VERSION_NAME" "$source_asset" --clobber || exit_on_error "Source upload failed."
+          fi
 
           echo "Generating sha256sums file"
           if ! (cd "$APK_DIR_PATH"; sha256sum "${apk_files[@]}" \

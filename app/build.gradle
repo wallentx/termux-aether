@@ -5,7 +5,14 @@ plugins {
 // Explicit diagnostic mode: adds probes and restricts installation to Android 17.
 def pixelProbe = providers.gradleProperty("pixelProbe").orNull == "true"
 def arm64Only = rootProject.ext.termuxArm64Only
-def aetherPrototype = providers.gradleProperty("aetherPrototype").orNull == "true"
+// Pixel builds include the validated runtime. Keep the old property as an alias.
+def aetherSetting = providers.gradleProperty("aetherEnabled")
+    .orElse(providers.gradleProperty("aetherPrototype"))
+    .getOrElse((arm64Only && !pixelProbe).toString())
+if (!(aetherSetting in ["true", "false"])) {
+    throw new GradleException("aetherEnabled must be true or false")
+}
+def aetherEnabled = aetherSetting == "true"
 if (pixelProbe && gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }) {
     throw new GradleException("Pixel probes are debug-only; use :app:assembleDebug")
 }
@@ -159,7 +166,7 @@ android {
         }
     }
 
-    if (aetherPrototype) {
+    if (aetherEnabled) {
         sourceSets.main.assets.srcDirs 'src/aether/assets', "$buildDir/generated/aether/assets"
         sourceSets.main.jniLibs.srcDirs 'src/aether/jniLibs', "$buildDir/generated/aether/jniLibs"
     }
@@ -188,7 +195,7 @@ android {
     }
 }
 
-if (aetherPrototype) {
+if (aetherEnabled) {
     def prepareAether = tasks.register('prepareAether', Exec) {
         workingDir rootProject.projectDir
         commandLine 'bash', 'scripts/aether/build.sh',

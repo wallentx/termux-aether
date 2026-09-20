@@ -1,10 +1,25 @@
-# Aether native glibc prototype
+# Aether native glibc runtime
 
-Build only in CI, using Build > aether_prototype=true. The default APK profile,
-SDK 37, and existing rish installation remain available. This is an ARM64 proof
-of direct app-UID execution, not a general Linux distribution or sandbox.
+The normal Pixel build includes Aether by default: one ARM64 APK, target SDK 37.
+Build only in CI. `Build` workflow pushes need no special input; manual runs
+include Aether unless the retained `aether_prototype` checkbox is disabled.
+Existing rish support remains available. This runtime is not a Linux distribution
+or a sandbox.
 
-The prototype APK contains an executable glibc loader in Android's installed
+| Build selection | Aether |
+| --- | --- |
+| Default Pixel Gradle/CI build | Included |
+| `-PaetherEnabled=false` | Omitted |
+| CI repository variable `TERMUX_DISABLE_AETHER=true` | Omitted from Build and release APKs |
+| `all_apks` / `TERMUX_BUILD_ALL_APKS=true` | Existing multi-ABI builds, Aether omitted |
+| Diagnostic `-PpixelProbe=true` | Aether omitted unless explicitly enabled |
+
+`-PaetherPrototype=true/false` remains a legacy alias; `aetherEnabled` takes
+precedence. CI builds with Aether need `gcc-aarch64-linux-gnu` plus the Android
+NDK. Opting out removes the APK's loader/helper, so existing Aether commands
+will be unavailable until an enabled APK is installed and Termux is reopened.
+
+The APK contains an executable glibc loader in Android's installed
 native-library directory, matching Android-adapted glibc 2.44-0 libraries, and a
 Bionic helper. `aether-run PROGRAM [arguments]`
 uses the installed loader directly, bypassing the Bionic termux-exec interceptor.
@@ -72,11 +87,15 @@ whose local package database records PGP validation. `provenance.json` pins ever
 included ELF SHA-256 and the package recipe revision. CI checks those hashes
 before building. The APK retains the loader unstripped so its hash is preserved.
 
-The prototype build MUST publish the accompanying aether-source artifact with
+Every Aether-enabled build publishes an accompanying source archive with
 its APK: exact GNU glibc 2.44 source tarball, Termux package recipes/build scripts
 at the recorded commit, compatibility sources, copyright/license notices, and
-provenance. The prototype APK is not intended for publishing through ordinary
-release workflows until equivalent source distribution is wired there.
+provenance. The archive also includes the complete downstream Git tree and a
+manifest recording its commit and member hashes. CI verifies the packaged
+runtime, bundled probe, licenses, and corresponding sources before publishing
+APKs. The `aether-source` CI artifact contains `aether-source.tar.gz`; release
+builds upload a version-and-commit-named source archive before uploading APKs.
+A publication failure preserves the release and tag for retry.
 The preload and launcher sources in this directory use the repository's license;
 the glibc libraries retain their upstream licenses. See COPYING.LIB and LICENSES.
 
@@ -114,7 +133,7 @@ path. Both native `env sh -c 'exit 43'` and the Aether equivalent return 43,
 and the full execution probe reports `AETHER_PROBE_PASS`.
 The Geekbench result above validates the earlier explicit execve/posix_spawn path.
 
-The prototype APK also installs its matching probe with executable permissions.
+The APK also installs its matching probe with executable permissions.
 After updating and reopening Termux, run:
 
 ```sh
