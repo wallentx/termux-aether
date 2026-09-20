@@ -147,7 +147,18 @@ static int prepare(const char *path, char *const argv[], char *const env[],
         int result = prepare(args[0], args, env, out, spawning, depth + 1);
         int error = errno; free(args); errno = error; return result;
     }
-    char *target = realpath(path, NULL); if (!target) return -1;
+    /* Android's linker uses the invoked path as argv[0]. Resolving a Bionic
+     * symlink here turns e.g. bin/env into bin/coreutils and loses its applet.
+     * Keep that path; glibc has --argv0 and can use its canonical ELF identity. */
+    char *target = NULL;
+    if (glibc) target = realpath(path, NULL);
+    else if (path[0] == '/') target = strdup(path);
+    else {
+        char *cwd = getcwd(NULL, 0); if (!cwd) return -1;
+        int n = asprintf(&target, "%s/%s", cwd, path); free(cwd);
+        if (n < 0) return -1;
+    }
+    if (!target) return -1;
     const char *loader = config("AETHER_LOADER"), *libs = config("AETHER_LIBRARIES");
     const char *helper = config("AETHER_HELPER");
     if (!loader || !libs || !helper) { free(target); errno = EINVAL; return -1; }

@@ -124,6 +124,7 @@ static void check_execution(const char *self) {
     if(old_path) {setenv("PATH",old_path,1);free(old_path);}else unsetenv("PATH");
 }
 int main(int argc,char **argv) {
+    setvbuf(stdout,NULL,_IONBF,0);
     if(argc>1 && !strcmp(argv[1],"--script-child with spaces")) {
         assert(argc==4 && !strcmp(argv[3],"argument with spaces"));return 43;
     }
