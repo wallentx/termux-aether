@@ -1,80 +1,119 @@
 # Coordinated Aether releases
 
-All four components use the release tag `v1000.0.0` for this baseline. Android APKs
-use versionCode `1000000000`, reserving substantial space above upstream's
-versions while retaining room for future Aether updates. Future APK releases
-must increment that code. No finite version guarantees upstream can never pass
-it. The Pacman packages also have distinct names, so upstream packages do not
-silently replace them during ordinary upgrades.
+## Install with Pacman
 
-| Repository | Installed component |
+Download **`termux-aether-suite-aarch64.pkg.tar.xz`** and its `.sha256` file from
+[the app release](https://github.com/wallentx/termux-aether-app/releases/latest).
+The `.pkg` in the filename distinguishes the real Pacman package from the old
+extract-and-run bundle, `termux-aether-suite-aarch64.tar.xz`.
+
+```sh
+sha256sum -c termux-aether-suite-aarch64.pkg.tar.xz.sha256
+pacman -U ./termux-aether-suite-aarch64.pkg.tar.xz
+```
+
+On a new device, install the main app APK and finish its Pacman bootstrap first.
+The package targets native aarch64 Termux with the `com.termux` Pacman prefix.
+Pacman resolves missing Bash, Python, OpenSSH, util-linux and termux-am dependencies
+from configured repositories; use `pacman -Syu` first if those repositories are stale.
+It does not convert an APT environment.
+
+The suite directly owns the native exec libraries, API commands and updater.
+Its `provides`, `conflict` and `replaces` metadata covers both upstream and Aether
+exec/API packages, so Pacman transfers file ownership in one transaction. Use
+this suite or the standalone native packages, not both. No package script starts
+a nested Pacman transaction. XZ is decoded by Termux's archive library without
+spawning an external decompressor during replacement of the preload library.
+
+The package also places the two APKs and matching glibc sources under
+`$PREFIX/share/termux-aether-suite`. Android still confirms APK updates:
+
+```sh
+aether-apks api
+# Finish Android's confirmation, then update the terminal last:
+aether-apks app
+```
+
+Finish active terminal jobs and shut Arch down cleanly before updating the app
+APKs. Updating a running app can close its sessions.
+
+## Migrating manually installed commands
+
+Older installations may have nine unowned Aether wrappers in `$PREFIX/bin`:
+`termux-arch`, `termux-arch-resources`, `termux-arch-share`, `termux-arch-vm`,
+`termux-capabilities`, `termux-shizuku`, `termux-virtualization`, `Æ` and `æ`.
+Package replacement metadata cannot take ownership of an unowned file silently.
+
+Download `aether-install.py` and its `.sha256` from the same release, beside the
+new Pacman package and checksum. Verify the helper, then run the one-time migration:
+
+```sh
+sha256sum -c aether-install.py.sha256
+python aether-install.py --adopt-legacy ./termux-aether-suite-aarch64.pkg.tar.xz
+```
+
+Add `--check` to inspect without moving or installing anything. The helper checks
+package integrity and current ownership, saves affected files and the package list
+to `~/.local/state/termux-aether/upgrade-*`, and moves aside only the nine known
+unowned commands. Unknown files and files owned by unrelated packages are refused.
+If installation fails, absent legacy paths are restored; newly installed files
+are never overwritten during recovery. The retained backup is a recovery aid,
+not a complete user-data backup or automatic package rollback.
+
+An external preload copy keeps subprocess execution available throughout this
+transaction. No `--overwrite '*'` is needed. Do not edit the old `install.sh`:
+its checksum intentionally fails after edits. Use this supported migration path.
+
+## Subsequent upgrades
+
+Run `aether-update` to download the latest suite and perform a protected native
+upgrade, or use `pacman -U` on the new package directly. `aether-update --check`
+validates without installation; `--adopt-legacy` is also available for migration.
+After the native upgrade, use `aether-apks api` and `aether-apks app` when new APKs
+are supplied. Installing an APK alone does not upgrade native Pacman packages.
+
+Shizuku, its authorization, Arch guest images and rclone sharing remain optional.
+The suite does not initialize, replace or delete guest disks, home directories,
+credentials, app settings or package-managed glibc installations.
+
+## Versions and upgrade identity
+
+| Component | Release baseline |
 | --- | --- |
-| [termux-aether-app](https://github.com/wallentx/termux-aether-app) | `com.termux`, terminal, bundled glibc runtime and rish launcher |
-| [termux-aether-api](https://github.com/wallentx/termux-aether-api) | `com.termux.api`, Android/Shizuku/AVF bridge |
-| [termux-aether-api-package](https://github.com/wallentx/termux-aether-api-package) | `termux-aether-api`, API commands, `Æ`/`æ`, `aether-update` |
-| [termux-aether-exec-package](https://github.com/wallentx/termux-aether-exec-package) | `termux-aether-exec`, native executable compatibility |
+| Android app and API companion | Version `1000.0.0`, versionCode `1000000000` |
+| Pacman suite | `termux-aether-suite 1:1000.0.0-2` |
+| Native API commands | `termux-aether-api 1:1000.0.0-2`, provided by the suite |
+| Native execution | `termux-aether-exec 1:1000.0.0-1`, provided by the suite |
 
-## Install or upgrade the complete suite
+Packaging revision 2 reuses the unchanged APKs and exec library from v1000.0.0.
+It changes the distribution format, updater and migration handling. It does not
+needlessly bump the Android versionCode or rebuild those APKs. Future changed
+APKs must increment the code. High versions reserve space above ordinary upstream
+versions; no finite number guarantees upstream can never overtake them.
 
-1. Download `termux-aether-suite-aarch64.tar.xz` and its `.sha256` file from the
-   [app release](https://github.com/wallentx/termux-aether-app/releases/latest).
-   Verify with `sha256sum -c termux-aether-suite-aarch64.tar.xz.sha256`.
-2. Extract into an empty directory. On a new device install the app APK first,
-   open it and allow its Pacman bootstrap to finish.
-3. Inside Termux run `sh /path/to/extracted/install.sh`. `--check` validates the
-   bundle without changing packages. Pacman confirms replacement of official
-   `termux-exec`/`termux-api` packages and checks dependencies and file ownership.
-4. Install the API APK, then the app APK last, using the commands printed by the
-   installer. Updating the running terminal may close sessions; finish active
-   jobs and shut down Arch cleanly first.
+Android package IDs (`com.termux` and `com.termux.api`), shared UID and signing key
+remain unchanged. Matching signatures support updates in place. If Android reports
+a signature conflict, stop rather than uninstalling or clearing data to bypass it.
+Back up irreplaceable data before upgrading. These builds retain the public Termux
+debug test key; download only from the fork releases.
 
-After this first suite installation, `aether-update` downloads and validates the
-latest complete bundle and repeats the same upgrade procedure. Use
-`aether-update --check` for download/validation only. The native library and CLI
-updates still require this command; installing an APK alone does not update
-Pacman packages. APK installation always needs Android's confirmation.
+## Release inputs
 
-The CLI depends on the Aether exec package and on Bash, util-linux, termux-am,
-Python and OpenSSH. Pacman uses its configured repositories for missing
-dependencies; refresh/update them with `pacman -Syu` if they are stale. This
-bundle targets native aarch64 Termux with the Pacman bootstrap. It refuses an APT
-prefix instead of converting or replacing it.
+Keep `master` untouched for upstream syncs; publish fork changes from `dev`.
+Build standalone native packages using their documented native packaging scripts.
+`scripts/suite/package.py` merges their payloads into one tracked package and records
+the package versions and suite source commit alongside the original APK commits.
+Provide verified APKs, matching glibc sources, the native packages and `release.json`
+as inputs. Build after committing; publish package-only source tags for packaging
+revisions rather than moving existing release tags.
 
-Shizuku, its authorization, an Arch guest image, and rclone for directory sharing
-remain optional. The bundle does not initialize, replace, migrate or delete an
-Arch disk. It does not install another glibc distribution over the app's runtime.
+The builder publishes `termux-aether-suite-aarch64.pkg.tar.xz` and its checksum.
+Also publish the matching `aether-install.py` and checksum; `aether-update` verifies
+both before executing the installer. Keep the old v1000.0.0 extract-and-run bundle
+unchanged for historical reproducibility; it is superseded by the `.pkg.tar.xz` asset.
 
-## Preserving data
-
-APK IDs, the shared UID and signing key remain unchanged. Android can update a
-matching installed build in place, retaining the home directory, package prefix,
-app preferences, credentials and existing VM files. A different signing key
-causes Android to reject the update: stop there; **do not uninstall** to bypass
-that check. Back up irreplaceable data before any upgrade.
-
-Before a native transaction the installer saves affected existing files and the
-installed package list under `~/.local/state/termux-aether/upgrade-*`. This is a
-recovery aid, not a full backup or an automatic rollback. Its preload copy is
-outside the paths Pacman replaces and remains available if installation stops.
-Unowned file conflicts are reported; the installer never force-overwrites them.
-
-The signing key is the same public Termux test key used by these development
-builds. Version numbers and checksums do not turn it into a private signing
-identity. Download only from these fork releases.
-
-## Releasing
-
-Keep `master` as the untouched upstream-sync branch and release from `dev`.
-Increment the two Android versionCodes for each subsequent release. Build both
-native packages on aarch64 Termux using their documented packaging scripts;
-never install them as a side effect of packaging. Publish their package assets
-and tags, and let each APK release workflow build its corresponding tagged code.
-Keep the glibc source archive with the app APK.
-
-After all component assets pass validation, use `scripts/suite/bundle.py` with
-the asset directory, output directory, version and JSON mapping of all four
-repository names to exact commit SHAs. Verify both APK certificates, application
-IDs and versionCodes before bundling. Publish the suite archive and checksum
-**last** on the app release. Each suite includes matching glibc sources and a
-`release.json` recording its source revisions. A missing or mismatched bundle
-checksum stops `aether-update` before package installation.
+Run `python scripts/suite/validate-transaction.py PACKAGE` on native Termux to
+exercise a real Pacman replacement inside a temporary root/database, with the
+preload library itself included in the replacement. This test disables scriptlets
+in that isolated root and verifies file ownership, dependencies and file presence.
+It does not install into the live prefix. `strace` is required for its decompressor check.

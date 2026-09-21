@@ -74,7 +74,7 @@ matched AVF-versus-PRoot speedup has been established.
 
 ## Install
 
-1. Download the ARM64 APK from a successful
+1. For normal installation and upgrades, use the [Pacman suite release](https://github.com/wallentx/termux-aether-app/releases/latest) and [upgrade guide](docs/RELEASES.md). For development snapshots, download the ARM64 APK from a successful
    [Build run on `dev`](https://github.com/wallentx/termux-aether-app/actions/workflows/debug_build.yml?query=branch%3Adev+event%3Apush).
    GitHub requires sign-in to download Actions artifacts. Normal builds produce
    one `pacman-android-7` ARM64 APK, checksums, and matching Aether sources.
@@ -94,8 +94,7 @@ The project name does not change Android package IDs, data paths, or CLI names.
 
 The default build is tailored to ARM64 Pixel testing; other ABIs and APT bootstraps
 remain available through [explicit build profiles](docs/BUILD_PROFILES.md).
-They are not covered by the Pixel validation results. Builds run in CI, not on
-our development phones.
+They are not covered by the Pixel validation results. APKs are built in CI; native companion packages can be built on aarch64 Termux.
 
 ## Try it
 
