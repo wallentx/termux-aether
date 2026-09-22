@@ -46,3 +46,41 @@ and do not interpret these numbers as a universal FPS or SIMD speedup.
 
 On older builds, rapid image replacement can retain gigabytes until the periodic
 image sweep. Start with a shorter run when testing such builds.
+
+## On-device collection through Shizuku
+
+An authorized bundled `rish` can collect on the same phone, without wireless ADB.
+Run from this repository in a visible Termux session, using new directories:
+
+```sh
+run="$HOME/.local/state/termux-aether/render-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$run"
+python scripts/render-benchmark/capture.py --local-rish \
+  --remote-dir "$run/workload" --output "$run/report" > "$run/collector.log" 2>&1 &
+python scripts/render-benchmark/workload.py "$run/workload" --seconds 10
+wait
+```
+
+Local collection reads handshake files directly as Termux. Shell output is staged
+in a unique temporary Downloads directory and removed after each command, because
+rish pipe output was incomplete on the tested preview. This needs Android shared
+storage access. The collector does not change screen-lock or display settings.
+It checks focus, unlocked state and rotation between samples; the workload rejects
+terminal-size changes. Checks are sampled, not proof against a brief switch away
+between checks. Keep the phone visible and untouched. A failed collector sends an
+abort marker so the workload restores its terminal state promptly.
+
+`partial-summary.json` retains completed phases if a later phase fails;
+`summary.json` is written only when all requested phases pass. Sampled deadline
+misses compare each frame's completion timestamp with its own `FrameDeadline`,
+not a fixed 60 Hz budget. They may differ from Android's aggregate jank counters.
+The observed frame intervals are included to expose refresh-rate changes.
+
+Optional `--input-phase` on **both** commands injects `a` keys while scrolling.
+Do not type or switch sessions during it. The metric is command dispatch to PTY
+receipt, including Shizuku and Android input-command startup; it is **not physical
+keyboard latency or input-to-display latency**. A count mismatch rejects the run.
+This option is unavailable on the tested September 22 Pixel firmware: Android's
+input shell service returns `Failed transaction (2147483646)`. A preflight now
+rejects that condition before the workload measurement begins. Input-to-display
+latency still needs a working event injector and presentation tracing.

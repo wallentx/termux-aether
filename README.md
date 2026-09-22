@@ -35,6 +35,11 @@ controls were broadly unchanged. These results do not establish matching gains
 in frame rate, battery life, or arbitrary shell programs. The Java/Bitmap changes
 are batching and copying optimizations; no hand-written SIMD is claimed.
 
+A further scalar width-classification fast path measured **1.42x throughput for
+ASCII** and **1.22x for mixed text** under Android ART. All Unicode code-point
+widths matched the baseline. This isolated routine result still needs an APK
+frame comparison; see the [width benchmark](docs/PERFORMANCE.md#printable-ascii-width-classification-september-22-2026).
+
 Release tooling also improved: single-pass source verification took **88.91 ms
 instead of 200.45 ms**, with **29.3% lower peak process memory**, in a September 21
 archive benchmark. This is a packaging-tool improvement, not terminal startup time.

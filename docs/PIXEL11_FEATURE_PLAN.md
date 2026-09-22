@@ -462,3 +462,18 @@ on the existing release fixture (2.25x throughput), with 29.3% lower peak proces
 RSS. This removes redundant work without adding libdeflate or changing archive
 formats; it is a release-tool improvement, not a terminal-runtime speedup. See
 [the measured comparison](PERFORMANCE.md#single-pass-release-source-verification).
+
+
+## Rendering checkpoint: 2026-09-22
+
+Two installed-app frame captures now record scrolling and sixel redraw/replacement,
+with raw frame timestamps and separate terminal geometry. The collector supports
+on-device Shizuku, sampled focus/rotation guards, per-frame deadline counters and
+prompt workload cancellation. Synthetic input is unavailable through this preview's
+input shell service; input-to-display latency remains unmeasured.
+
+A narrow scalar printable-ASCII fast path in `WcWidth` passed exhaustive equivalence
+across all Unicode code points. Paired ART measurements show 1.42x ASCII and 1.22x
+mixed-text classification throughput, with Unicode-only unchanged. It is local
+source, not installed in the APK; a matched APK frame comparison remains required.
+See [performance evidence](PERFORMANCE.md#printable-ascii-width-classification-september-22-2026).

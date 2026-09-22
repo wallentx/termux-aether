@@ -179,3 +179,46 @@ measured there. All 19 focused packaging regression tests pass locally.
 
 Reproduction instructions are in the
 [Aether runtime guide](../scripts/aether/README.md#source-verification-performance).
+
+
+## Printable-ASCII width classification: September 22, 2026
+
+Device frame captures on the installed `1000.0.0` APK showed activity drawing
+cost more than GPU completion in the sampled workloads. This identifies CPU-side
+drawing as a profiling target, not `WcWidth` as a proven dominant bottleneck.
+Inspection found the renderer classifies each code point and checks the following
+character for combining behavior. Printable ASCII can return width one before
+Unicode range checks and table lookups, without changing redraw scheduling.
+
+A standalone Android ART comparison against `dc24a918` verified identical widths
+for **all 1,114,112 Unicode code points**, plus four out-of-range integer boundaries.
+Five alternating pairs after warmup measured:
+
+| Width-classification input | Before, million calls/s | After, million calls/s | Throughput ratio |
+| --- | ---: | ---: | ---: |
+| Printable ASCII | 300.99 | 427.53 | 1.42x |
+| 75% ASCII / 25% Unicode | 188.58 | 230.42 | 1.22x |
+| Unicode-only control | 77.35 | 77.38 | 1.00x |
+
+[Raw samples and source hashes](benchmarks/2026-09-22/pixel11-width.json);
+[reproduction harness](../scripts/width-benchmark/README.md). This is a scalar
+Java fast path, not SIMD. Clocks and thermals were uncontrolled. The candidate has
+**not been installed in the terminal APK**, so no frame-rate, battery, or
+input-latency improvement is established.
+
+### Installed-app frame characterization
+
+[Archived captures](benchmarks/2026-09-22/README.md) retain frame timestamps,
+Android aggregate counters and workload metadata. Both used 10-second phases at
+60 producer updates/s. Run 1 used an 83x49 terminal; run 2 used 83x74 with sampled
+focus/rotation guards. These are separate baselines, not before/after results.
+
+| Workload | Run 1 frame p95 | Run 2 frame p95 |
+| --- | ---: | ---: |
+| Colored text scrolling | 11.119 ms | 11.051 ms |
+| Existing sixel image redraw | 10.408 ms | 9.677 ms |
+| Sixel image replacement | 9.846 ms | 8.399 ms |
+
+The input-injection attempt failed in Android's shell service; no input-latency
+result is claimed. The collector now checks that facility before attempting the
+optional input phase. Neither frame run contained the new width fast path.

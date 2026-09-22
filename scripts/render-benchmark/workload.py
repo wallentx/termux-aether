@@ -5,6 +5,9 @@ import json
 import os
 from pathlib import Path
 import time
+import select
+import termios
+import tty
 
 
 def emit(data):
@@ -25,6 +28,7 @@ def main():
     parser.add_argument('directory', type=Path)
     parser.add_argument('--seconds', type=float, default=20)
     parser.add_argument('--fps', type=float, default=60)
+    parser.add_argument('--input-phase', action='store_true')
     args = parser.parse_args()
     if not os.isatty(1):
         parser.error('Run in a foreground Termux terminal')
@@ -35,11 +39,31 @@ def main():
     image = sixel(960, 600)
     image_growth = sixel(960, 600, declared=False)
     results = []
+    received = []
+    saved_terminal = termios.tcgetattr(0) if args.input_phase else None
+    if saved_terminal is not None:
+        tty.setcbreak(0)
+
+    def check_abort():
+        if (args.directory / 'abort').exists():
+            raise SystemExit('Collector stopped; benchmark aborted')
+
+    def collect_input():
+        if select.select([0], [], [], 0)[0]:
+            data = os.read(0, 1024)
+            if any(c != ord('a') for c in data):
+                raise RuntimeError('Unexpected keyboard input during synthetic input test')
+            received.extend([time.monotonic_ns()] * len(data))
+            emit(('\r\ninput received: ' + str(len(received)) + '\r\n').encode())
+
     emit(b'\x1b[?1049h\x1b[?25l')
     try:
-        for name in ('text_scroll', 'image_redraw', 'image_replace'):
+        phases = ['text_scroll', 'image_redraw', 'image_replace']
+        if args.input_phase:
+            phases.append('input_echo')
+        for name in phases:
             emit(b'\x1b[0m\x1b[2J\x1b[H')
-            if name == 'text_scroll':
+            if name in ('text_scroll', 'input_echo'):
                 emit(('render baseline ' * (columns * rows // 16)).encode())
             else:
                 emit(image)
@@ -48,6 +72,7 @@ def main():
             go = args.directory / (name + '.go')
             wait_start = time.monotonic()
             while not go.exists():
+                check_abort()
                 if time.monotonic() - wait_start > 120:
                     raise TimeoutError('No collector start signal')
                 time.sleep(.05)
@@ -55,7 +80,10 @@ def main():
             count = 0
             late = 0
             while time.monotonic() - start < args.seconds:
-                if name == 'text_scroll':
+                check_abort()
+                if os.get_terminal_size() != (columns, rows):
+                    raise RuntimeError('Terminal dimensions changed during capture')
+                if name in ('text_scroll', 'input_echo'):
                     payload = ((f'\x1b[32m{count:06d}\x1b[0m ' + 'abcdefghij ' * (columns // 11))
                                + '\r\n') * 4
                     emit(payload.encode())
@@ -65,6 +93,8 @@ def main():
                 else:
                     # Undeclared raster exercises bitmap growth as well as decoding and uploads.
                     emit(b'\x1b[H' + image_growth)
+                if name == 'input_echo':
+                    collect_input()
                 count += 1
                 delay = start + count / args.fps - time.monotonic()
                 if delay > 0:
@@ -77,13 +107,19 @@ def main():
             ack = args.directory / (name + '.ack')
             wait_start = time.monotonic()
             while not ack.exists():
+                check_abort()
+                if name == 'input_echo':
+                    collect_input()
                 if time.monotonic() - wait_start > 120:
                     raise TimeoutError('No collector finish signal')
                 time.sleep(.05)
         (args.directory / 'result.json').write_text(json.dumps({
             'columns': columns, 'rows': rows, 'image_width': 960, 'image_height': 600,
-            'fps': args.fps, 'seconds': args.seconds, 'results': results}, indent=2))
+            'fps': args.fps, 'seconds': args.seconds, 'results': results,
+            'input_received_ns': received}, indent=2))
     finally:
+        if saved_terminal is not None:
+            termios.tcsetattr(0, termios.TCSANOW, saved_terminal)
         emit(b'\x1b[0m\x1b[?25h\x1b[?1049l')
 
 
