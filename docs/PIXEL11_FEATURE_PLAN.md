@@ -175,7 +175,7 @@ is not the same guarantee as protected-VM isolation against the Android host.
 Ordinary Termux already executes ARM64 instructions natively; the VM adds Linux
 kernel/ABI compatibility and avoids PRoot syscall translation for guest workloads.
 
-### Deferred storage optimization: Virtio-FS
+### Storage optimization in progress: Virtio-FS
 
 - [ ] **V6 - Direct Termux/Arch directory sharing (separate future PR).** Evaluate
   Virtio-FS as an alternative to the working SSHFS-over-SSH/vsock share. First
@@ -187,8 +187,27 @@ kernel/ABI compatibility and avoids PRoot syscall translation for guest workload
   symlinks, locking, reconnects and VM session lifetime. Compare small-file metadata
   operations and representative project builds against SSHFS and guest-local ext4.
   Keep SSHFS available until the new path is verified; lower overhead is a goal,
-  not an established performance result. Deferred at the user's request; this
-  entry does not start implementation or change the current sharing defaults.
+  not an established performance result. Prototype work, the reversible
+  guest-kernel upgrade and opt-in normal-session Android shared-storage mounts
+  are complete. Private-home access and comparative benchmarks remain open.
+
+  **2026-09-21 prototype checkpoint:** two disposable diskless VMs successfully
+  attached the AVF filesystem backend for a new Android Downloads directory.
+  The same backend was denied Termux-private directory traversal by SELinux.
+  Running an extracted backend as the app instead failed mount-namespace creation.
+  A subsequent CI-built kernel and diskless initramfs passed Pixel mount, read,
+  write, rename and unmount tests on 2026-09-22 UTC (API commit `e909c7e`). No
+  speedup is established. The subsequent kernel upgrade/rollback passed on the
+  existing Arch disk (API commit `a7ac531`): new-kernel boot, live-owner lock
+  rejection, old-kernel rollback boot, reinstall and clean shutdown. The new
+  kernel is installed. API `adc3dc2` and CLI `8096892`/`5c831d7` subsequently
+  passed normal-session file I/O, rename, suspend/resume, automatic unmount and
+  shutdown, restart persistence and disable/re-enable on the Pixel.
+  `termux-arch-vm --share-enable [ANDROID_FOLDER]` selects the folder; this
+  Pixel uses `Download/AetherShared` at `/mnt/android`. A status-query hang
+  found during suspension was fixed and the approved VM recovery completed.
+  A guest-kernel toggle alone cannot enable private-home sharing. See the
+  [device findings and next implementation gate](VIRTIO_FS_FEASIBILITY.md).
 
 Sources: [Podroid AVF setup](https://extv.github.io/Podroid/guide/backends.html),
 [Podroid AVF implementation](https://github.com/ExTV/Podroid/tree/main/app/src/main/java/com/excp/podroid/engine/avf),

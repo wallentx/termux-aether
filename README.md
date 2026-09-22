@@ -14,6 +14,33 @@ Built on [Termux](https://github.com/termux/termux-app) and
 compatibility fixes and measured terminal optimizations. This is an independent
 fork; report fork-specific issues [here](https://github.com/wallentx/termux-aether-app/issues).
 
+## Performance highlights
+
+Measured on a **Pixel 11 Pro XL running Android 17**, September 19, 2026.
+These are improvements to individual operations against this fork's previous
+implementations, not a whole-app comparison with stock Termux.
+
+| Optimized operation | Before | After | Improvement |
+| --- | ---: | ---: | ---: |
+| Sixel decode, long repeats of 8192 pixels | 13.620 ms/image | 0.152 ms/image | **89.9x faster** |
+| Copy a 160-column simple-text row | 2.409 us | 0.058 us | **41.8x faster** |
+| Clear a 160x48 simple-text buffer | 108.0 us | 2.71 us | **39.9x faster** |
+| Bulk ASCII parsing and buffer updates | 24 MiB/s | 417 MiB/s | **17.4x throughput** |
+| Bitmap growth, 1920x1080 to 1920x1180 | 4.45 ms | 2.72 ms | **39% less time** |
+
+The largest sixel gain is a synthetic long-repeat case; repeats of 16 pixels
+improved **7.0x**, and overpainting improved **22.4x**. Colored-text throughput
+improved **6.7x**. Single-column sixel, single-byte input, and Unicode fallback
+controls were broadly unchanged. These results do not establish matching gains
+in frame rate, battery life, or arbitrary shell programs. The Java/Bitmap changes
+are batching and copying optimizations; no hand-written SIMD is claimed.
+
+Release tooling also improved: single-pass source verification took **88.91 ms
+instead of 200.45 ms**, with **29.3% lower peak process memory**, in a September 21
+archive benchmark. This is a packaging-tool improvement, not terminal startup time.
+
+[Methods, baseline commits, limitations, and raw results](docs/PERFORMANCE.md).
+
 ## What sets it apart
 
 - **Modern Android support.** Target SDK 37, compiled against SDK 37.2, with
@@ -50,27 +77,31 @@ Aether leaves package-managed glibc files alone. Some Linux programs need additi
 libraries or encounter Android filesystem/syscall restrictions; this is not universal
 Linux compatibility. See the [runtime guide](scripts/aether/README.md).
 
-## Measured improvements
+## Verified SIMD and native-library acceleration
 
-Pixel 11 Pro XL, Android 17, September 19, 2026. These are **operation-level
-comparisons against the previous implementations in this fork**, not a controlled
-whole-app comparison against the latest stock Termux APK.
+On the same Pixel, a September 21 audit confirmed that installed native libraries
+already use hardware acceleration. These comparisons enable versus disable
+acceleration in the **same library**; they are not fork-versus-stock Termux gains
+or new optimizations added by this fork.
 
-| Workload | Before | After | Improvement |
+| Workload | Acceleration disabled | Normal dispatch | Throughput gain |
 | --- | ---: | ---: | ---: |
-| Bulk ASCII parsing and buffer updates | 24 MiB/s | 417 MiB/s | 17.4x throughput |
-| Colored text parsing and buffer updates | 26 MiB/s | 175 MiB/s | 6.7x throughput |
-| Clear a 160x48 simple-text buffer | 108.0 us | 2.71 us | 39.9x faster |
-| Sixel decode, repeated spans of 16 pixels | 6.25 ms/image | 0.89 ms/image | 7.0x faster |
-| Bitmap growth, 1920x1080 to 1920x1180 | 4.45 ms | 2.72 ms | 39% less time |
+| libjpeg-turbo 3.2.0 JPEG encode | 339.01 MiB/s | 512.59 MiB/s | 1.51x |
+| libjpeg-turbo 3.2.0 JPEG decode | 281.41 MiB/s | 399.58 MiB/s | 1.42x |
+| OpenSSL 3.6.3 SHA-256 | 259.57 MiB/s | 2382.33 MiB/s | 9.18x |
 
-Longer sixel repeats reached 63.5–89.9x; single-column sixel, single-byte input,
-and Unicode fallback controls were broadly unchanged. These numbers do not imply
-matching gains in frame rate, battery life, or arbitrary shell programs. No
-hand-written SIMD acceleration is claimed for these Java/Bitmap changes, and no
-matched AVF-versus-PRoot speedup has been established.
+The JPEG results compare normal SIMD dispatch with SIMD disabled; SHA-256 uses
+ARM cryptographic acceleration, rather than general-purpose SIMD. JPEG output
+and SHA-256 digests matched between modes.
 
-[Methods, baseline commits, limitations, and raw results](docs/PERFORMANCE.md).
+A separate comparison found **3.62x to 5.75x faster whole-buffer decompression**
+with libdeflate than zlib on two synthetic inputs. This compares library
+implementations, not SIMD on/off, and remains a candidate for targeted integration;
+it does not change the default compression library. These short, warm-buffer
+benchmarks do not establish whole-app speedups or battery savings. A matched
+AVF-versus-PRoot speedup has not been established.
+
+[Native-package audit, raw results, and reproduction instructions](docs/PERFORMANCE.md#installed-native-package-audit-september-21-2026).
 
 ## Install
 
