@@ -146,3 +146,36 @@ does not justify replacing zlib globally or changing streaming/archive defaults.
 No installed package or global runtime setting was changed by this audit.
 Reproduction instructions are in the
 [validation guide](PIXEL11_VALIDATION.md#jpeg-dispatch-and-whole-buffer-compression-audit).
+
+## Single-pass release source verification
+
+The next implemented optimization removes repeated gzip decompression from
+`scripts/aether/verify-package.py`. Previously, locating members scanned the
+archive, then individual reads could seek backwards and decompress earlier data
+again. The new verifier hashes all regular files during one sequential pass,
+using 1 MiB chunks for large sources. It retains the source-commit, required-file,
+manifest-hash, runtime-provenance and checkout-source checks; it also rejects
+duplicate members and validates the gzip trailer. No libdeflate dependency or
+archive-format change is required.
+
+Measured on the Pixel with the existing v1000.0.0 APK and its **23,797,649-byte**
+source archive for commit `821b4f3f6526`. Five paired samples alternated old/new
+order after warmup, using separate child processes. The baseline is the verifier
+at `266b0cba`; the [raw report](benchmarks/2026-09-21/pixel11-source-verification.json)
+records the exact script and artifact hashes.
+
+| Measurement | Before | After | Improvement |
+| --- | ---: | ---: | ---: |
+| Median complete verification time | 200.45 ms | 88.91 ms | 2.25x throughput |
+| Median peak process RSS | 50.14 MiB | 35.44 MiB | 29.3% lower |
+
+This saves about **112 ms per check** for this archive, not seconds of terminal
+startup. The benchmark reconstructs the release's source/generated-file fixture
+and substitutes only its historical Git HEAD result. Timings exclude fixture
+preparation, interpreter startup, downloads and builds. Filesystem caches were
+warm; CPU clocks and thermals were uncontrolled. Peak RSS includes Python and
+APK verification, not just decompression. No CI-runner speedup is claimed until
+measured there. All 19 focused packaging regression tests pass locally.
+
+Reproduction instructions are in the
+[Aether runtime guide](../scripts/aether/README.md#source-verification-performance).

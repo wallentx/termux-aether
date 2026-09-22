@@ -436,3 +436,10 @@ bounded-buffer decompression consumer that can use libdeflate: first measure
 that application's end-to-end workload before changing it. No global zlib
 replacement or streaming/archive default change is justified by this audit.
 Media, inference, SVE2/SME kernels and guest-side dispatch remain unaudited.
+
+The first follow-up found avoidable repeated decompression in release source
+verification. A single-pass hash verifier now takes 88.91 ms versus 200.45 ms
+on the existing release fixture (2.25x throughput), with 29.3% lower peak process
+RSS. This removes redundant work without adding libdeflate or changing archive
+formats; it is a release-tool improvement, not a terminal-runtime speedup. See
+[the measured comparison](PERFORMANCE.md#single-pass-release-source-verification).

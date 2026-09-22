@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Reject APKs whose Aether payload or accompanying sources do not match this checkout."""
 import argparse
+import gzip
 import hashlib
 import json
 from pathlib import Path
@@ -11,6 +12,39 @@ import zipfile
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def source_hashes(source_archive):
+    """Hash each regular member once, including archives with the manifest last."""
+    hashes = {}
+    manifest = None
+    with gzip.open(source_archive, 'rb') as compressed:
+        with tarfile.open(fileobj=compressed, mode='r|') as archive:
+            for member in archive:
+                if member.isdir():
+                    continue
+                name = member.name.removeprefix('./')
+                if name in hashes:
+                    raise ValueError('Duplicate source entry: ' + name)
+                if not member.isfile():
+                    raise ValueError('Source entry is not a regular file: ' + name)
+                with archive.extractfile(member) as data:
+                    if name == 'manifest.json':
+                        contents = data.read()
+                        manifest = json.loads(contents)
+                        hashes[name] = digest(contents)
+                    else:
+                        checksum = hashlib.sha256()
+                        for chunk in iter(lambda: data.read(1024 * 1024), b''):
+                            checksum.update(chunk)
+                        hashes[name] = checksum.hexdigest()
+        # Tar ends before the gzip stream does. Drain it to check the gzip CRC
+        # and reject truncation even when every requested tar member was read.
+        while compressed.read(1024 * 1024):
+            pass
+    if manifest is None:
+        raise ValueError('Missing source manifest')
+    return manifest, hashes
 
 
 def verify(apk_path, enabled, source_archive, root=Path('.')):
@@ -48,32 +82,25 @@ def verify(apk_path, enabled, source_archive, root=Path('.')):
             if apk.read('assets/aether/' + name) != (root / 'app/src/aether/assets/aether' / name).read_bytes():
                 raise ValueError('Missing or changed runtime license: ' + name)
 
-    with tarfile.open(source_archive, 'r:gz') as archive:
-        def read(name):
-            member = archive.getmember('./' + name)
-            if not member.isfile():
-                raise ValueError('Source entry is not a regular file: ' + name)
-            return archive.extractfile(member).read()
-
-        manifest = json.loads(read('manifest.json'))
-        commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
-        if manifest['source_commit'] != commit:
-            raise ValueError('Source archive is from a different commit')
-        required = {'termux-app-source.tar.gz', 'glibc-2.44.tar.xz', 'termux-glibc-recipes-c2b00b9e.tar.gz',
-                    'COPYING.LIB', 'LICENSES', 'provenance.json', 'launcher.c', 'compat.c', 'exec.c',
-                    'system.c', 'probe.c', 'build.sh', 'source-bundle.sh', 'README.md'}
-        if not required <= manifest['sha256'].keys():
-            raise ValueError('Incomplete source archive')
-        for name, expected in manifest['sha256'].items():
-            if digest(read(name)) != expected:
-                raise ValueError('Source archive hash mismatch: ' + name)
-        if digest(read('glibc-2.44.tar.xz')) != provenance['source_sha256']:
-            raise ValueError('Wrong upstream glibc source')
-        if read('provenance.json') != provenance_bytes:
-            raise ValueError('Source provenance differs from APK')
-        for name in ('launcher.c', 'compat.c', 'exec.c', 'system.c', 'probe.c', 'build.sh', 'source-bundle.sh', 'README.md'):
-            if read(name) != (root / 'scripts/aether' / name).read_bytes():
-                raise ValueError('Compatibility source differs from checkout: ' + name)
+    manifest, hashes = source_hashes(source_archive)
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
+    if manifest['source_commit'] != commit:
+        raise ValueError('Source archive is from a different commit')
+    required = {'termux-app-source.tar.gz', 'glibc-2.44.tar.xz', 'termux-glibc-recipes-c2b00b9e.tar.gz',
+                'COPYING.LIB', 'LICENSES', 'provenance.json', 'launcher.c', 'compat.c', 'exec.c',
+                'system.c', 'probe.c', 'build.sh', 'source-bundle.sh', 'README.md'}
+    if not required <= manifest['sha256'].keys() or not required <= hashes.keys():
+        raise ValueError('Incomplete source archive')
+    for name, expected in manifest['sha256'].items():
+        if hashes.get(name) != expected:
+            raise ValueError('Source archive hash mismatch: ' + name)
+    if hashes['glibc-2.44.tar.xz'] != provenance['source_sha256']:
+        raise ValueError('Wrong upstream glibc source')
+    if hashes['provenance.json'] != digest(provenance_bytes):
+        raise ValueError('Source provenance differs from APK')
+    for name in ('launcher.c', 'compat.c', 'exec.c', 'system.c', 'probe.c', 'build.sh', 'source-bundle.sh', 'README.md'):
+        if hashes[name] != digest((root / 'scripts/aether' / name).read_bytes()):
+            raise ValueError('Compatibility source differs from checkout: ' + name)
 
 
 def main():

@@ -72,8 +72,97 @@ class PackageTest(unittest.TestCase):
         with patch.object(package.subprocess, 'check_output', return_value='fixture-commit\n'):
             package.verify(self.apk, enabled, self.archive, self.root)
 
+    def rewrite_sources(self, transform):
+        with tarfile.open(self.archive, 'r:gz') as archive:
+            members = [(member, archive.extractfile(member).read()) for member in archive]
+        with tarfile.open(self.archive, 'w:gz') as archive:
+            for member, data in transform(members):
+                member.size = len(data)
+                archive.addfile(member, io.BytesIO(data))
+
     def test_enabled_payload_and_matching_sources(self):
         self.verify()
+
+    def test_streaming_does_not_seek_even_with_manifest_last(self):
+        with patch.object(package.gzip.GzipFile, 'seek', side_effect=AssertionError('backward scan')):
+            self.verify()
+
+    def test_manifest_first_also_passes(self):
+        self.rewrite_sources(lambda members: members[-1:] + members[:-1])
+        self.verify()
+
+    def test_large_sources_are_read_in_bounded_chunks(self):
+        self.sources['extra-source'] = b'x' * (3 * 1024 * 1024)
+        self.pack_sources()
+        sizes = []
+        original = tarfile.ExFileObject.read
+
+        def read(stream, size=-1):
+            sizes.append(size)
+            return original(stream, size)
+
+        with patch.object(tarfile.ExFileObject, 'read', read):
+            self.verify()
+        self.assertEqual(sizes.count(-1), 1)  # Only the small JSON manifest.
+        self.assertLessEqual(max(sizes), 1024 * 1024)
+
+    def test_missing_manifest_rejected(self):
+        self.rewrite_sources(lambda members: members[:-1])
+        with self.assertRaisesRegex(ValueError, 'Missing source manifest'):
+            self.verify()
+
+    def test_glibc_source_must_match_runtime_provenance(self):
+        self.sources['glibc-2.44.tar.xz'] = b'another upstream source'
+        self.pack_sources()
+        with self.assertRaisesRegex(ValueError, 'Wrong upstream glibc source'):
+            self.verify()
+
+    def test_source_provenance_must_match_apk(self):
+        self.sources['provenance.json'] += b'\n'
+        self.pack_sources()
+        with self.assertRaisesRegex(ValueError, 'Source provenance differs from APK'):
+            self.verify()
+
+    def test_changed_member_rejected_without_updating_manifest(self):
+        self.rewrite_sources(lambda members: [(m, b'corrupt' if m.name == './exec.c' else d)
+                                               for m, d in members])
+        with self.assertRaisesRegex(ValueError, 'hash mismatch: exec.c'):
+            self.verify()
+
+    def test_missing_required_member_rejected(self):
+        self.rewrite_sources(lambda members: [(m, d) for m, d in members if m.name != './exec.c'])
+        with self.assertRaisesRegex(ValueError, 'Incomplete source archive'):
+            self.verify()
+
+    def test_duplicate_member_and_manifest_rejected(self):
+        for name in ('./exec.c', './manifest.json'):
+            with self.subTest(name=name):
+                self.pack_sources()
+                self.rewrite_sources(lambda members: members + [(m, d) for m, d in members if m.name == name])
+                with self.assertRaisesRegex(ValueError, 'Duplicate source entry'):
+                    self.verify()
+
+    def test_symlink_source_rejected(self):
+        def symlink(members):
+            for member, data in members:
+                if member.name == './exec.c':
+                    member.type = tarfile.SYMTYPE
+                    member.linkname = './compat.c'
+                    data = b''
+                yield member, data
+        self.rewrite_sources(symlink)
+        with self.assertRaisesRegex(ValueError, 'not a regular file: exec.c'):
+            self.verify()
+
+    def test_gzip_crc_and_truncated_trailer_rejected(self):
+        original = self.archive.read_bytes()
+        bad_crc = bytearray(original)
+        bad_crc[-8] ^= 1
+        for data in (bad_crc, original[:-4]):
+            with self.subTest(length=len(data)):
+                self.archive.write_bytes(data)
+                with self.assertRaises((package.gzip.BadGzipFile, EOFError)):
+                    self.verify()
 
     def test_missing_sources_rejected(self):
         self.archive.unlink()

@@ -99,6 +99,36 @@ A publication failure preserves the release and tag for retry.
 The preload and launcher sources in this directory use the repository's license;
 the glibc libraries retain their upstream licenses. See COPYING.LIB and LICENSES.
 
+### Source-verification performance
+
+`verify-package.py` reads the gzip source archive once, hashes regular members in
+1 MiB chunks, and compares the resulting hashes with the manifest, runtime
+provenance and checkout sources. The manifest may appear anywhere in the archive.
+It rejects duplicate or non-regular file entries and drains the gzip stream to
+validate its trailer. APK, source-commit and required-member checks remain active.
+It does not extract source files or require an additional compression library.
+
+To compare verifiers with an existing matching release APK/source pair:
+
+```sh
+git show 266b0cba:scripts/aether/verify-package.py > "$TMPDIR/aether-verify-before.py"
+python3 -B scripts/aether/benchmark_package.py \
+  --baseline "$TMPDIR/aether-verify-before.py" \
+  --apk /path/to/release.apk --source /path/to/aether-source.tar.gz
+```
+
+The benchmark reconstructs the historical checkout inputs and generated payload
+paths in a temporary fixture. Only the fixture's Git HEAD lookup is substituted
+with the archive's recorded source commit; this is a benchmark, not a substitute
+for release verification against an actual checkout. It does not build or install
+anything. Five paired samples alternate implementations after warmup, each in a
+fresh process. JSON results under `~/benchmarks/` contain input hashes, raw times
+and peak process RSS (Linux/Android KiB). Fixture preparation and interpreter
+startup are excluded from timing; peak RSS includes the whole child process.
+
+See [measured verification results](../../docs/PERFORMANCE.md#single-pass-release-source-verification)
+for the observed speed and memory improvement, separate from terminal runtime.
+
 ## Repeatable installed-runtime validation
 
 Run `python scripts/aether/validate.py --cpu` from a native Termux session, or
