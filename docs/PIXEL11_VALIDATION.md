@@ -213,3 +213,42 @@ This checks one installed package operation. ARM SHA instructions are distinct
 from general NEON/SVE SIMD; neither a CPU feature flag nor this result proves that
 other packages dispatch to their optimized kernels. Use the rendering collector
 for end-to-end terminal latency, with the terminal visible and consistent input.
+
+### JPEG dispatch and whole-buffer compression audit
+
+Run from the app repository in native Termux:
+
+```sh
+python scripts/pixel-validate/native_package_audit.py
+```
+
+This takes about 30 seconds on the development Pixel with working capability
+queries. It uses the installed `libjpeg-turbo`, `zlib` and `libdeflate` libraries
+through Python's `ctypes`; it installs nothing, compiles nothing and requires no
+screen interaction. JSON results are saved under `~/benchmarks/`. Missing libraries
+or failed workloads produce a nonzero exit and a report containing the error.
+
+Five paired samples alternate execution order, with at least 0.3 seconds per
+operation after warmup. Each sample runs in a fresh child process. JPEG compares
+normal dispatch against the upstream-supported child-only `JSIMD_FORCENONE=1`
+override, using a deterministic 1023x769 RGB fixture, quality 90, 4:2:0 subsampling
+and accurate integer DCT. It requires identical encoded bytes and decoded pixels
+across modes; it does not compare lossy decoded pixels to the original RGB input.
+See the [upstream SIMD documentation](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/main/simd/README.md)
+for the override's meaning.
+
+Compression compares the C APIs of zlib and libdeflate on deterministic 1 MiB
+log-like and pseudorandom inputs. Both use reusable output buffers, and both
+decoders receive the same zlib stream. Encoding uses level 6 in each library,
+which does not imply equivalent effort or compression ratio; compressed sizes
+are recorded separately. Every sample must round-trip exactly. This comparison
+measures library implementations, not an isolated SIMD speedup. Libdeflate's
+reusable compressor/decompressor allocation is outside the timed region; zlib's
+whole-buffer API performs its internal setup per call. It does not model streaming
+compression, disk I/O or process startup.
+
+Reports include library paths and SHA-256 identities, package versions, benchmark
+parameters, script identity, app UID, and capability/thermal/battery snapshots
+before and after the run. They do not continuously sample temperature, control CPU
+clocks or establish battery savings. Existing shell dispatch settings are preserved;
+only benchmark children receive normalized dispatch settings.

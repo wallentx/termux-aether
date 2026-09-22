@@ -93,3 +93,56 @@ stock Termux. Earlier native, shell, and Arch scores had different battery/therm
 conditions. A matched AVF-versus-PRoot comparison remains outstanding. Existing
 frame traces also do not justify a general FPS, lower-memory-use, or battery-life
 claim; some captures were affected by redraw/rotation problems.
+
+## Installed native-package audit: September 21, 2026
+
+These results audit libraries already installed on the Pixel; they are not gains
+introduced by a new package build. Runs used the native Termux app UID 10445.
+Raw samples and library identities are saved in
+[SHA-256 dispatch](benchmarks/2026-09-21/pixel11-sha256-dispatch.json) and
+[JPEG/compression audit](benchmarks/2026-09-21/pixel11-native-package-audit.json).
+
+OpenSSL 3.6.3 SHA-256 measured 2382.33 MiB/s with normal dispatch versus 259.57
+MiB/s with the child-only ARM capability mask set to zero: **9.18x**. Digests
+matched. This exercises ARM cryptographic acceleration, not general-purpose SIMD.
+
+Installed libjpeg-turbo 3.2.0 was compared with its SIMD modules disabled using
+the [upstream-supported override](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/main/simd/README.md).
+Five paired samples alternated normal/disabled order. Rates use uncompressed RGB
+bytes for a synthetic 1023x769 image, quality 90, 4:2:0 subsampling and accurate DCT.
+Both encoded bytes and decoded pixel hashes matched across all samples.
+
+| JPEG operation | SIMD disabled MiB/s | Normal MiB/s | Throughput ratio |
+| --- | ---: | ---: | ---: |
+| Encode | 339.01 | 512.59 | 1.51x |
+| Decode | 281.41 | 399.58 | 1.42x |
+
+The separate compression comparison used installed zlib 1.3.2 and libdeflate 1.26,
+with reusable output buffers and 1 MiB deterministic inputs. Compression used each
+library's level 6; decompression used identical zlib-encoded input. All round trips
+matched. This measures whole-buffer API implementations, not isolated SIMD dispatch.
+
+| Input / operation | zlib MiB/s | libdeflate MiB/s | Throughput ratio |
+| --- | ---: | ---: | ---: |
+| Log-like records / compress | 110.34 | 124.84 | 1.13x |
+| Log-like records / decompress | 978.86 | 3541.38 | 3.62x |
+| Pseudorandom / compress | 50.24 | 103.65 | 2.06x |
+| Pseudorandom / decompress | 2706.51 | 15567.43 | 5.75x |
+
+For the records input, compressed sizes were 108591 bytes with zlib and 102036
+with libdeflate. For pseudorandom input they were 1048902 and 1048672 bytes.
+Compression levels are not equivalent across libraries. Libdeflate object setup
+is outside timing; zlib's whole-buffer API includes its per-call internal setup.
+These warm-buffer measurements exclude disk I/O and process startup.
+
+The final JPEG/compression run took about 30 seconds. Android reported no thermal
+throttling at either endpoint; battery temperature rose from 33.5 to 33.9 C while
+unplugged. Clocks, scheduling and intermediate temperatures were not controlled.
+There is no sustained-throughput or battery-energy conclusion.
+
+**Decision:** keep the working crypto/JPEG dispatch. Libdeflate is a measured
+candidate for bounded, whole-buffer compression/decompression integrations; this
+does not justify replacing zlib globally or changing streaming/archive defaults.
+No installed package or global runtime setting was changed by this audit.
+Reproduction instructions are in the
+[validation guide](PIXEL11_VALIDATION.md#jpeg-dispatch-and-whole-buffer-compression-audit).

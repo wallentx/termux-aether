@@ -175,6 +175,21 @@ is not the same guarantee as protected-VM isolation against the Android host.
 Ordinary Termux already executes ARM64 instructions natively; the VM adds Linux
 kernel/ABI compatibility and avoids PRoot syscall translation for guest workloads.
 
+### Deferred storage optimization: Virtio-FS
+
+- [ ] **V6 - Direct Termux/Arch directory sharing (separate future PR).** Evaluate
+  Virtio-FS as an alternative to the working SSHFS-over-SSH/vsock share. First
+  verify that the Pixel's AVF/crosvm implementation exposes a usable host-side
+  filesystem backend and can access explicitly selected Termux directories under
+  the existing permission model. Guest-kernel `CONFIG_VIRTIO_FS` support is also
+  required; enabling that option alone is insufficient. If the host integration
+  is feasible, add guest support and validate bidirectional visibility, permissions,
+  symlinks, locking, reconnects and VM session lifetime. Compare small-file metadata
+  operations and representative project builds against SSHFS and guest-local ext4.
+  Keep SSHFS available until the new path is verified; lower overhead is a goal,
+  not an established performance result. Deferred at the user's request; this
+  entry does not start implementation or change the current sharing defaults.
+
 Sources: [Podroid AVF setup](https://extv.github.io/Podroid/guide/backends.html),
 [Podroid AVF implementation](https://github.com/ExTV/Podroid/tree/main/app/src/main/java/com/excp/podroid/engine/avf),
 [AOSP Linux development environment](https://source.android.com/docs/core/virtualization/usecases#linux-development-environment).
@@ -286,7 +301,10 @@ and treat that as SIMD validation; Java/Kotlin code uses ART's compilation path.
 Acceptance: capability JSON from native and guest contexts; recorded selected
 backends and correctness results; reproducible before/after measurements for at
 least one real user workload. All compilation happens off-device; only installed
-probes and benchmarks run on the Pixel. No SIMD speedup has been measured yet.
+probes and benchmarks run on the Pixel. This was the initial acceptance plan;
+later measurements and implementation checkpoints below supersede its original
+unmeasured status. The user subsequently authorized native compilation on the
+Pixel 11; off-device compilation is not a current restriction for that device.
 
 Sources: [Android NEON defaults](https://developer.android.com/ndk/guides/cpu-arm-neon),
 [Android runtime CPU detection](https://developer.android.com/ndk/guides/cpu-features),
@@ -401,3 +419,20 @@ listening socket. See the CLI fork README for lifetime and caching semantics.
 The September 19 native Geekbench run was charging and ended with light thermal
 throttling. Its score cannot isolate glibc, AVF or rish overhead relative to the
 earlier runs. A matched comparison still needs the user's planned PRoot install.
+
+## Native-package optimization checkpoint: 2026-09-21
+
+S2/S4/S5 now have a scoped installed-library audit, not a complete package audit.
+The native Termux run confirms existing OpenSSL SHA-256 acceleration (9.18x
+normal versus disabled dispatch) and libjpeg-turbo SIMD benefit (1.51x encode,
+1.42x decode). JPEG bytes/pixels match across modes. Installed libdeflate also
+outperformed zlib on the audited whole-buffer compression APIs, with exact
+round trips; this library comparison does not isolate SIMD instruction usage.
+The repeatable runner, raw samples, caveats and measurements are documented in
+[PERFORMANCE.md](PERFORMANCE.md#installed-native-package-audit-september-21-2026).
+
+Keep the working crypto/JPEG dispatch. The next S3 candidate is a concrete
+bounded-buffer decompression consumer that can use libdeflate: first measure
+that application's end-to-end workload before changing it. No global zlib
+replacement or streaming/archive default change is justified by this audit.
+Media, inference, SVE2/SME kernels and guest-side dispatch remain unaudited.
