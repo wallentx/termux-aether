@@ -5,6 +5,11 @@ plugins {
 // Explicit diagnostic mode: adds probes and restricts installation to Android 17.
 def pixelProbe = providers.gradleProperty("pixelProbe").orNull == "true"
 def arm64Only = rootProject.ext.termuxArm64Only
+def appMinSdk = pixelProbe ? 37 : providers.gradleProperty("minSdkVersion").get().toInteger()
+if (appMinSdk < 23) {
+    throw new GradleException("Aether's bundled Shizuku provider requires minSdkVersion >= 23")
+}
+def aetherOutputDirectory = layout.buildDirectory.dir("generated/aether")
 // Pixel builds include the validated runtime. Keep the old property as an alias.
 def aetherSetting = providers.gradleProperty("aetherEnabled")
     .orElse(providers.gradleProperty("aetherPrototype"))
@@ -28,16 +33,19 @@ ext {
 }
 
 android {
-    buildFeatures { aidl true }
-    namespace "com.termux"
+    buildFeatures {
+        aidl = true
+        buildConfig = true
+    }
+    namespace = "com.termux"
 
     if (pixelProbe) {
         compileSdk {
             version = release(37) { minorApiLevel = 2 }
         }
-        buildToolsVersion '37.0.0'
+        buildToolsVersion = '37.0.0'
     } else {
-        compileSdkVersion project.properties.compileSdkVersion.toInteger()
+        compileSdk = project.properties.compileSdkVersion.toInteger()
         compileSdkMinor = project.properties.compileSdkMinorVersion.toInteger()
     }
     ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
@@ -65,11 +73,11 @@ android {
     }
 
     defaultConfig {
-        minSdkVersion pixelProbe ? 37 : project.properties.minSdkVersion.toInteger()
-        targetSdkVersion pixelProbe ? 37 : project.properties.targetSdkVersion.toInteger()
+        minSdk = appMinSdk
+        targetSdk = pixelProbe ? 37 : project.properties.targetSdkVersion.toInteger()
         // Reserve a high fork version range while leaving room for future upgrades.
-        versionCode 1000000000
-        versionName "1000.0.0"
+        versionCode = 1000000000
+        versionName = "1000.0.0"
 
         if (appVersionName) versionName = appVersionName
         validateVersionName(versionName)
@@ -98,7 +106,7 @@ android {
 
         splits {
             abi {
-                enable (!arm64Only && ((gradle.startParameter.taskNames.any { it.contains("Debug") } && splitAPKsForDebugBuilds == "1") ||
+                enable = (!arm64Only && ((gradle.startParameter.taskNames.any { it.contains("Debug") } && splitAPKsForDebugBuilds == "1") ||
                     (gradle.startParameter.taskNames.any { it.contains("Release") } && splitAPKsForReleaseBuilds == "1")))
                 reset ()
                 if (arm64Only) {
@@ -106,49 +114,45 @@ android {
                 } else {
                     include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
                 }
-                universalApk !arm64Only
+                universalApk = !arm64Only
             }
         }
     }
 
     signingConfigs {
         debug {
-            storeFile file('testkey_untrusted.jks')
-            keyAlias 'alias'
-            storePassword 'xrj45yWGLbsO7W0v'
-            keyPassword 'xrj45yWGLbsO7W0v'
+            storeFile = file('testkey_untrusted.jks')
+            keyAlias = 'alias'
+            storePassword = 'xrj45yWGLbsO7W0v'
+            keyPassword = 'xrj45yWGLbsO7W0v'
         }
     }
 
     buildTypes {
         release {
             // Android run-as requires debuggable, including for the release execution service.
-            debuggable true
-            minifyEnabled true
-            shrinkResources false // Reproducible builds
+            debuggable = true
+            minifyEnabled = true
+            shrinkResources = false // Reproducible builds
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
 
         debug {
-            signingConfig signingConfigs.debug
+            signingConfig = signingConfigs.debug
         }
-    }
-
-    variantFilter { variant ->
-        if (pixelProbe && variant.buildType.name != 'debug') variant.setIgnore(true)
     }
 
     compileOptions {
         // Flag to enable support for the new language APIs
-        coreLibraryDesugaringEnabled true
+        coreLibraryDesugaringEnabled = true
 
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     externalNativeBuild {
         ndkBuild {
-            path "src/main/cpp/Android.mk"
+            path = file("src/main/cpp/Android.mk")
         }
     }
 
@@ -162,16 +166,16 @@ android {
         }
     }
 
-    packagingOptions {
+    packaging {
         jniLibs {
-            useLegacyPackaging true
+            useLegacyPackaging = true
             keepDebugSymbols += '**/libaether-loader.so'
         }
     }
 
     if (aetherEnabled) {
-        sourceSets.main.assets.srcDirs 'src/aether/assets', "$buildDir/generated/aether/assets"
-        sourceSets.main.jniLibs.srcDirs 'src/aether/jniLibs', "$buildDir/generated/aether/jniLibs"
+        sourceSets.main.assets.srcDirs 'src/aether/assets', aetherOutputDirectory.map { it.dir('assets') }
+        sourceSets.main.jniLibs.srcDirs 'src/aether/jniLibs', aetherOutputDirectory.map { it.dir('jniLibs') }
     }
 
     applicationVariants.all { variant ->
@@ -186,10 +190,6 @@ android {
         }
     }
 
-    buildFeatures {
-        buildConfig true
-    }
-
     if (pixelProbe) {
         sourceSets.debug {
             java.srcDir 'src/pixelProbe/java'
@@ -198,11 +198,17 @@ android {
     }
 }
 
+androidComponents {
+    beforeVariants(selector().all()) { variantBuilder ->
+        if (pixelProbe && variantBuilder.buildType != 'debug') variantBuilder.enable = false
+    }
+}
+
 if (aetherEnabled) {
     def prepareAether = tasks.register('prepareAether', Exec) {
         workingDir rootProject.projectDir
         commandLine 'bash', 'scripts/aether/build.sh',
-            "$buildDir/generated/aether", "${android.sdkDirectory}/ndk/${android.ndkVersion}"
+            aetherOutputDirectory.get().asFile, "${android.sdkDirectory}/ndk/${android.ndkVersion}"
     }
     tasks.named('preBuild').configure { dependsOn prepareAether }
 }
@@ -215,10 +221,9 @@ dependencies {
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:1.1.5"
 }
 
-task versionName {
-    doLast {
-        print android.defaultConfig.versionName
-    }
+def configuredVersionName = android.defaultConfig.versionName
+tasks.register('versionName') {
+    doLast { print configuredVersionName }
 }
 
 def validateVersionName(String versionName) {
@@ -228,13 +233,15 @@ def validateVersionName(String versionName) {
         throw new GradleException("The versionName '"  + versionName + "' is not a valid version as per semantic version '2.0.0' spec in the format 'major.minor.patch(-prerelease)(+buildmetadata)'. https://semver.org/spec/v2.0.0.html.")
 }
 
-def downloadBootstrap(String arch, String expectedChecksum, String version,
-                      String repository = "termux/termux-packages") {
-    if (rootProject.ext.termuxArm64Only && arch != "aarch64") return
+def bootstrapProjectDirectory = layout.projectDirectory.asFile
+def bootstrapLogger = logger
+def downloadBootstrap = { String arch, String expectedChecksum, String version,
+                          String repository = "termux/termux-packages" ->
+    if (arm64Only && arch != "aarch64") return
     def digest = java.security.MessageDigest.getInstance("SHA-256")
 
     def localUrl = "src/main/cpp/bootstrap-" + arch + ".zip"
-    def file = new File(projectDir, localUrl)
+    def file = new File(bootstrapProjectDirectory, localUrl)
     if (file.exists()) {
         def buffer = new byte[8192]
         def input = new FileInputStream(file)
@@ -248,13 +255,13 @@ def downloadBootstrap(String arch, String expectedChecksum, String version,
         if (checksum == expectedChecksum) {
             return
         } else {
-            logger.quiet("Deleting old local file with wrong hash: " + localUrl + ": expected: " + expectedChecksum + ", actual: " + checksum)
+            bootstrapLogger.quiet("Deleting old local file with wrong hash: " + localUrl + ": expected: " + expectedChecksum + ", actual: " + checksum)
             file.delete()
         }
     }
 
     def remoteUrl = "https://github.com/" + repository + "/releases/download/bootstrap-" + version + "/bootstrap-" + arch + ".zip"
-    logger.quiet("Downloading " + remoteUrl + " ...")
+    bootstrapLogger.quiet("Downloading " + remoteUrl + " ...")
 
     file.parentFile.mkdirs()
     def out = new BufferedOutputStream(new FileOutputStream(file))
@@ -273,17 +280,14 @@ def downloadBootstrap(String arch, String expectedChecksum, String version,
     }
 }
 
-clean {
-    doLast {
-        def tree = fileTree(new File(projectDir, 'src/main/cpp'))
-        tree.include 'bootstrap-*.zip'
-        tree.each { it.delete() }
-    }
+tasks.named('clean', Delete).configure {
+    delete fileTree('src/main/cpp') { include 'bootstrap-*.zip' }
 }
 
-task downloadBootstraps() {
+def bootstrapPackageVariant = project.ext.packageVariant
+def downloadBootstraps = tasks.register('downloadBootstraps') {
     doLast {
-        def packageVariant = project.ext.packageVariant
+        def packageVariant = bootstrapPackageVariant
         if (packageVariant == "pacman-android-7") {
             // Pin release and SHA-256 values; do not resolve a moving 'latest' at build time.
             def version = "2026.09.13-r1%2Bpacman.android-7"
@@ -310,8 +314,5 @@ task downloadBootstraps() {
     }
 }
 
-afterEvaluate {
-    android.applicationVariants.all { variant ->
-        variant.javaCompileProvider.get().dependsOn(downloadBootstraps)
-    }
-}
+// The native bootstrap assembly consumes these ZIPs, so prepare them before any compilation.
+tasks.named('preBuild').configure { dependsOn downloadBootstraps }

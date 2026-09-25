@@ -32,9 +32,10 @@ still needs device validation; existing APT prefixes are not converted by updati
 the APK. Bootstrap package compatibility (Android 7+) is distinct from targetSdk.
 
 The normal build now targets API 37 and compiles against SDK 37.2, as requested.
-The minimum SDK remains 21 to preserve older build options; the optional diagnostic
-requires 37. Native dynamic-program startup now uses the system linker and the
-modern termux-exec preload. Service declarations, notification intents, receiver
+The minimum SDK is 23 to satisfy the bundled Shizuku provider; the optional diagnostic
+requires 37. Normal modern-SDK sessions now require Shizuku plus `run-as` for
+direct execution. Legacy recovery and non-terminal background tasks retain linker
+handling. Service declarations, notification intents, receiver
 flags and notification/LAN permission requests have been updated. This establishes
 the migration code, not proof that all terminal workloads pass on the Pixel.
 

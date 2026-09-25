@@ -97,7 +97,7 @@ jobs:
           done
 
           for apk in "${apk_files[@]}"; do
-            expected_code=$(sed -n 's/^[[:space:]]*versionCode \([0-9]*\)$/\1/p' app/build.gradle)
+            expected_code=$(sed -n 's/^[[:space:]]*versionCode = \([0-9]*\)$/\1/p' app/build.gradle)
             test -n "$expected_code" || exit_on_error "Missing versionCode"
             apkanalyzer manifest application-id "$APK_DIR_PATH/$apk" | grep -Fx 'com.termux' || exit_on_error "Wrong application ID"
             apkanalyzer manifest version-code "$APK_DIR_PATH/$apk" | grep -Fx "$expected_code" || exit_on_error "Wrong versionCode"

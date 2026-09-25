@@ -77,7 +77,7 @@ jobs:
           fi
 
           # Set RELEASE_VERSION_NAME to "<CURRENT_VERSION_NAME>+<last_commit_hash>"
-          CURRENT_VERSION_NAME_REGEX='\s+versionName "([^"]+)"$'
+          CURRENT_VERSION_NAME_REGEX='\s+versionName = "([^"]+)"$'
           CURRENT_VERSION_NAME="$(grep -m 1 -E "$CURRENT_VERSION_NAME_REGEX" ./app/build.gradle | sed -r "s/$CURRENT_VERSION_NAME_REGEX/\1/")"
           RELEASE_VERSION_NAME="v$CURRENT_VERSION_NAME+${GITHUB_SHA:0:7}" # The "+" is necessary so that versioning precedence is not affected
           if ! printf "%s" "${RELEASE_VERSION_NAME/v/}" | grep -qP '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$'; then
@@ -137,7 +137,7 @@ jobs:
         run: |
           apk="$APK_DIR_PATH/${APK_BASENAME_PREFIX}_arm64-v8a.apk"
           apkanalyzer manifest target-sdk "$apk" | grep -x 37
-          expected_code=$(sed -n 's/^[[:space:]]*versionCode \([0-9]*\)$/\1/p' app/build.gradle)
+          expected_code=$(sed -n 's/^[[:space:]]*versionCode = \([0-9]*\)$/\1/p' app/build.gradle)
           test -n "$expected_code"
           apkanalyzer manifest version-code "$apk" | grep -x "$expected_code"
           python3 - "$apk" <<'PY'

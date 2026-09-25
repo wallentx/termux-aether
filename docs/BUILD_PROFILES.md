@@ -1,11 +1,10 @@
 # APK build profiles
 
-The fork uses Android `versionCode` 1000, above the Play Store source's 141 as of
-2026-09-18. This suppresses update offers for that lower-version, differently
-signed build while retaining `com.termux` and its existing data/package paths.
-It is not a permanent Play Store exclusion: revisit the value if Play catches up.
-Future fork releases must keep or increase it; an older APK with a lower code is
-a downgrade. The displayed `versionName` still includes the Git SHA in CI.
+The fork uses Android `versionCode` 1000000000 and `versionName` 1000.0.0,
+reserving a high fork version range while retaining `com.termux` and its existing
+data/package paths. This is not a permanent Play Store exclusion. Future fork
+releases must keep or increase the code; an older APK with a lower code is a
+downgrade. The displayed `versionName` includes the Git SHA in CI.
 
 The default `pixel11` profile produces one ARM64 APK per requested build type,
 using the `pacman-android-7` bootstrap. It builds only ARM64 native libraries and
@@ -16,8 +15,9 @@ bootstrap remain available through explicit options.
 It is the bootstrap's compatibility baseline, not the application's target SDK.
 The regular APK now targets API 37 and compiles against SDK 37.2. The diagnostic
 uses the same target, adds probes, and requires Android 17. The normal minimum
-SDK remains 21 to retain the older build options; the selected Pacman bootstrap
-requires Android 7+. The target is configured, but Pixel runtime validation is
+SDK is 23 because the bundled Shizuku provider requires it, including when the
+legacy execution path is selected. API 21/22 APKs are no longer supported;
+the selected Pacman bootstrap independently requires Android 7+. The target is configured, but Pixel runtime validation is
 still required before treating this as a daily-use release.
 
 Run Gradle builds only in CI or on another build host, not this Termux workspace.
@@ -27,13 +27,24 @@ Run Gradle builds only in CI or on another build host, not this Termux workspace
 | Default Pixel 11 build | `:app:assembleDebug` | One `*_arm64-v8a.apk` |
 | All architectures | `:app:assembleDebug -PtermuxBuildProfile=all` | Four ABI APKs plus universal, using the existing debug split defaults |
 | APT bootstrap | Set `TERMUX_PACKAGE_VARIANT=apt-android-7` | Selected profile with the retained APT bootstrap |
-| Older bootstrap | Set `TERMUX_PACKAGE_VARIANT=apt-android-5` | Selected profile with Android 5/6-compatible bootstrap |
+| Older bootstrap | Set `TERMUX_PACKAGE_VARIANT=apt-android-5` | Retained bootstrap; APK still requires API 23+ |
 | SDK/SIMD diagnostic | `:app:assembleDebug -PpixelProbe=true` | One ARM64 diagnostic APK, with target SDK 37 |
 
 For a single release APK, use `:app:assembleRelease`; the default profile still
 selects ARM64. Signing remains a separate release configuration. Switching build
 profiles in an existing checkout can leave old outputs in the output directory;
 use a clean build on the build host when comparing the artifact set.
+
+Release builds remain debuggable for `run-as` with minification requested as
+before; AGP's warning that debug builds disable optimization/obfuscation is
+expected and is separate from Gradle deprecations. Gradle warnings are
+printed individually (`org.gradle.warning.mode=all`). The scripts use explicit
+property assignments, lazy task registration, build-directory providers, and
+`androidComponents.beforeVariants` for diagnostic filtering. APK naming still
+uses the legacy variant API; migrate that before upgrading to AGP 9. The current
+AGP 8.13.2 / Gradle 9.2.1 versions are unchanged, and AGP's SDK 37.2 compatibility
+warning remains visible. Script cleanup alone does not establish AGP 9 or
+Gradle 10 compatibility.
 
 ## GitHub Actions
 
@@ -79,11 +90,14 @@ Termux environment was modified while implementing these defaults.
 
 ## API 37 runtime migration
 
-Normal Termux launches on Android 10+ with target SDK 29+ route app-private dynamic
-executables through the system linker. Script interpreters and shebang arguments
-are resolved first; login shells retain login behavior. The modern termux-exec
-linker preload is installed in the environment before the first shell so child
-processes can use the same mechanism. Failsafe sessions retain the system shell.
+Normal Termux launches on Android 10+ with target SDK 29+ now require the Shizuku
+session service and `run-as`. They execute directly with linker execution
+disabled; unavailable service access opens setup instead of replaying commands.
+Failsafe sessions explicitly retain the legacy system-shell/linker path.
+See [session validation](../scripts/session-validate/README.md) for the component
+probe results and the installed-APK checks still required.
+
+The legacy launcher and non-terminal `AppShell` tasks still use linker handling.
 The installer atomically replaces the packaged direct preload with its matching
 linker variant, because `login` resets `LD_PRELOAD`; custom preload contents are
 left untouched. This applies to fresh Pacman installs and existing modern prefixes.
@@ -94,8 +108,8 @@ and Android 17 local-network permissions once. If denied, grant them later in
 Android Settings > Apps > Termux > Permissions. The existing all-files-access flow
 remains available through `termux-setup-storage`.
 
-Static binaries, raw exec syscalls, `/proc/self/exe`, plugin/background launches,
-keyboard/insets, package installation and upgrades still require device tests.
+Installed-APK checks for native executables, raw exec syscalls, `/proc/self/exe`,
+plugin/background launches, keyboard/insets, package installation and upgrades remain required.
 The older APT bootstraps may lack modern termux-exec; use the explicit
 `-PtargetSdkVersion=28` override for those legacy environments. No local builds
 or device installations were performed for this change.
