@@ -49,7 +49,7 @@ transfer, rather than only a separately launched shell probe.
 | Original Go compiler/runtime | Pure-Go and cgo builds, argv/identity, spawn/re-exec, native children, prefix shebangs, relative cwd, `go run`, and `go test` passed |
 | Storage and API | `~/storage/downloads` and `$EXTERNAL_STORAGE/Download` write/read/delete and `termux-battery-status` passed |
 | Temporary directory | Installed launcher lost `TMPDIR`; corrected command builder passed eight unit tests and a real run-as control/fix comparison; fixed APK validation remains pending |
-| Foreign script interpreter paths | Stock Go raw exec of `#!/usr/bin/env` failed; Termux-prefix interpreter paths passed |
+| Foreign script interpreter paths | Stock Go raw exec of `#!/usr/bin/env` failed; rewriting installed scripts with `termux-fix-shebang` passed, including `env -S` |
 
 Go's missing-TMPDIR diagnostic still built successfully with the stock package's
 default temporary directory. Subsequent compiler probes explicitly supplied
@@ -61,6 +61,31 @@ rerunning `go test .` from the package directory passed. Evidence is retained in
 Rotation/resize, service loss, explicit recovery, forced session closure,
 app restart and reboot still require the remaining installed-APK checks below.
 Do not stop Shizuku while the active development session depends on it.
+
+### Installed-script shebang repair
+
+The bundled `termux-fix-shebang /path/to/installed-script` rewrites the interpreter
+path to the Termux prefix. For example, `#!/usr/bin/env -S sh -e` becomes
+`#!/data/data/com.termux/files/usr/bin/env -S sh -e`, preserving `env`'s argument
+splitting and PATH lookup. Original Go programs can then launch the script
+through their raw exec syscalls without a custom Go runtime.
+
+On 2026-09-25, 45 standalone personal scripts and five installed package commands
+were repaired on the Pixel. Backups, hashes and modes are recorded in
+`~/.local/state/aether-session-implementation/shebang-repair-20260925T205510Z/manifest.json`.
+Every change was checked to affect only the first interpreter path and preserve
+the file mode. Personal symlink targets, including source repositories, were
+left unchanged; the `npm`/`npx` package symlinks still point to their original
+installed targets.
+
+`npm`, `npx`, `gdbus-codegen`, `glib-genmarshal`, and `glib-mkenums` all failed
+through the original Go probe before repair and passed afterward, using both
+pure-Go and cgo probes. A separate `env -S` fixture preserved spaced and empty
+arguments. Package ownership remains unchanged, but these installed file contents
+now differ from their package archives; an upgrade can restore the old shebang.
+Apply the repair to installed copies after such upgrades. This is not a kernel
+path alias or an automatic global interceptor. The tool follows symlinks, so do
+not pass source-linked commands unless editing the source file is intended.
 
 On the installed APK, validate:
 

@@ -7,8 +7,12 @@ Original Termux Go and Gum passed the Shizuku + `run-as` component probes and
 the main execution checks in installed APK `8012086`, so normal sessions are
 intended to return to the upstream packages. Installed checks found a `TMPDIR`
 restoration bug (fix pending APK validation) and confirmed that stock Go cannot
-directly execute a script whose interpreter is `/usr/bin/env`; Termux-prefix
-shebangs work. The new APK has not yet passed the complete installed-app validation. Recovery shells and
+directly execute a script whose interpreter is `/usr/bin/env`. The bundled
+`termux-fix-shebang` repairs installed scripts without modifying Go: the `env -S`
+fixture and five real package commands passed afterward with pure-Go and cgo
+probes. See [installed-script repair](../session-validate/README.md#installed-script-shebang-repair)
+for the scope, backups and package-update limitation. The new APK has not yet
+passed the complete installed-app validation. Recovery shells and
 non-terminal `AppShell` tasks still use the legacy launcher.
 
 Retirement order:
