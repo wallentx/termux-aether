@@ -15,8 +15,8 @@ bootstrap remain available through explicit options.
 It is the bootstrap's compatibility baseline, not the application's target SDK.
 The regular APK now targets API 37 and compiles against SDK 37.2. The diagnostic
 uses the same target, adds probes, and requires Android 17. The normal minimum
-SDK is 23 because the bundled Shizuku provider requires it, including when the
-legacy execution path is selected. API 21/22 APKs are no longer supported;
+SDK is 24 because the bundled Shizuku API requires it, including when the
+legacy execution path is selected. API 21-23 APKs are no longer supported;
 the selected Pacman bootstrap independently requires Android 7+. The target is configured, but Pixel runtime validation is
 still required before treating this as a daily-use release.
 
@@ -27,7 +27,7 @@ Run Gradle builds only in CI or on another build host, not this Termux workspace
 | Default Pixel 11 build | `:app:assembleDebug` | One `*_arm64-v8a.apk` |
 | All architectures | `:app:assembleDebug -PtermuxBuildProfile=all` | Four ABI APKs plus universal, using the existing debug split defaults |
 | APT bootstrap | Set `TERMUX_PACKAGE_VARIANT=apt-android-7` | Selected profile with the retained APT bootstrap |
-| Older bootstrap | Set `TERMUX_PACKAGE_VARIANT=apt-android-5` | Retained bootstrap; APK still requires API 23+ |
+| Older bootstrap | Set `TERMUX_PACKAGE_VARIANT=apt-android-5` | Retained bootstrap; APK still requires API 24+ |
 | SDK/SIMD diagnostic | `:app:assembleDebug -PpixelProbe=true` | One ARM64 diagnostic APK, with target SDK 37 |
 
 For a single release APK, use `:app:assembleRelease`; the default profile still
@@ -45,6 +45,21 @@ uses the legacy variant API; migrate that before upgrading to AGP 9. The current
 AGP 8.13.2 / Gradle 9.2.1 versions are unchanged, and AGP's SDK 37.2 compatibility
 warning remains visible. Script cleanup alone does not establish AGP 9 or
 Gradle 10 compatibility.
+
+The Shizuku 13.1.5 AAR manifests were checked directly on 2026-09-25, including
+the dependencies declared by their Maven POMs. The minimum must satisfy the
+whole dependency chain, not only the first library reported by manifest merging:
+
+| Shizuku artifact | Declared minimum API |
+| --- | --- |
+| `api` | 24 |
+| `provider` | 23 |
+| `aidl` | 23 |
+| `shared` | 23 |
+
+The build rejects minimum-SDK overrides below 24 instead of forcing incompatible
+libraries through `tools:overrideLibrary`. AndroidX annotation is the remaining
+declared dependency and has no Android manifest.
 
 ## GitHub Actions
 

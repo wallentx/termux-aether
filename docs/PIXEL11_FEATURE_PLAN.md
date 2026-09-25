@@ -32,7 +32,7 @@ still needs device validation; existing APT prefixes are not converted by updati
 the APK. Bootstrap package compatibility (Android 7+) is distinct from targetSdk.
 
 The normal build now targets API 37 and compiles against SDK 37.2, as requested.
-The minimum SDK is 23 to satisfy the bundled Shizuku provider; the optional diagnostic
+The minimum SDK is 24 to satisfy the bundled Shizuku API; the optional diagnostic
 requires 37. Normal modern-SDK sessions now require Shizuku plus `run-as` for
 direct execution. Legacy recovery and non-terminal background tasks retain linker
 handling. Service declarations, notification intents, receiver

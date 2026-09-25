@@ -6,8 +6,8 @@ plugins {
 def pixelProbe = providers.gradleProperty("pixelProbe").orNull == "true"
 def arm64Only = rootProject.ext.termuxArm64Only
 def appMinSdk = pixelProbe ? 37 : providers.gradleProperty("minSdkVersion").get().toInteger()
-if (appMinSdk < 23) {
-    throw new GradleException("Aether's bundled Shizuku provider requires minSdkVersion >= 23")
+if (appMinSdk < 24) {
+    throw new GradleException("Aether's bundled Shizuku API requires minSdkVersion >= 24")
 }
 def aetherOutputDirectory = layout.buildDirectory.dir("generated/aether")
 // Pixel builds include the validated runtime. Keep the old property as an alias.
