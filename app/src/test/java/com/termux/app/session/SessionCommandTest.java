@@ -7,6 +7,28 @@ import java.nio.file.Files;
 import static org.junit.Assert.*;
 
 public class SessionCommandTest {
+    @Test public void restoresTempDirectoryAfterSecureEnvironmentFiltering() throws Exception {
+        String shell = new File("/system/bin/sh").exists() ? "/system/bin/sh" : "/bin/bash";
+        File directory = Files.createTempDirectory("aether ' tmp").toFile();
+        try {
+            String script = SessionCommand.script(shell, directory.getPath(),
+                new String[]{"temp-probe", "-c", "printf '%s' \"$TMPDIR\""},
+                new String[]{"TMPDIR=" + directory.getPath()});
+            ProcessBuilder builder = new ProcessBuilder(shell, "-c", script).redirectErrorStream(true);
+            // Android strips TMPDIR while entering the privileged run-as executable.
+            builder.environment().remove("TMPDIR");
+            Process process = builder.start();
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[1024];
+            int count;
+            while ((count = process.getInputStream().read(buffer)) != -1) output.write(buffer, 0, count);
+            assertEquals(0, process.waitFor());
+            assertEquals(directory.getPath(), new String(output.toByteArray(), StandardCharsets.UTF_8));
+        } finally {
+            assertTrue(directory.delete());
+        }
+    }
+
     @Test public void transportsLiteralArgumentsEnvironmentAndQuotedWorkingDirectory() throws Exception {
         String shell = new File("/system/bin/sh").exists() ? "/system/bin/sh" : "/bin/bash";
         File cwd = Files.createTempDirectory("aether ' session").toFile();

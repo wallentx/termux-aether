@@ -34,10 +34,33 @@ Pixel validation on 2026-09-25 (Android 17 / API 37):
 | Actual Java storage bridge | Repeat preparation, custom shortcut preservation, run-as create/read/delete passed |
 | Installed preload with linker execution disabled | Original Go/Gum and stock-Go-built self-exec/child-process probe passed |
 
-These are component/device probes, not a completed APK integration test. The new
-APK has not yet been built or installed. Binder FD transfer, startup UI,
-rotation/resize, service loss, app restart and reboot still require the installed
-APK checks below. No new performance claim is established by these probes.
+These initial results are component/device probes. No new performance claim is
+established by these probes.
+
+Installed APK `1000.0.0+8012086` was checked later on 2026-09-25 after its build
+and unit-test workflows passed. The active zsh/Codex process ancestry reports
+the Termux UID in `runas_app`, `AETHER_SESSION_BACKEND=shizuku-runas`, and linker
+execution disabled. This exercises the installed session path and Binder PTY
+transfer, rather than only a separately launched shell probe.
+
+| Installed-session check | Result |
+| --- | --- |
+| Original Go 1.27.1, Gum and gh executables | Start successfully; interactive Gum selected Beta and exited 0 |
+| Original Go compiler/runtime | Pure-Go and cgo builds, argv/identity, spawn/re-exec, native children, prefix shebangs, relative cwd, `go run`, and `go test` passed |
+| Storage and API | `~/storage/downloads` and `$EXTERNAL_STORAGE/Download` write/read/delete and `termux-battery-status` passed |
+| Temporary directory | Installed launcher lost `TMPDIR`; corrected command builder passed eight unit tests and a real run-as control/fix comparison; fixed APK validation remains pending |
+| Foreign script interpreter paths | Stock Go raw exec of `#!/usr/bin/env` failed; Termux-prefix interpreter paths passed |
+
+Go's missing-TMPDIR diagnostic still built successfully with the stock package's
+default temporary directory. Subsequent compiler probes explicitly supplied
+temporary directories; they do not prove the installed environment bug fixed.
+The first `go test` harness invocation used an invalid absolute package import;
+rerunning `go test .` from the package directory passed. Evidence is retained in
+`~/.local/state/aether-session-implementation/installed-8012086/` on the Pixel.
+
+Rotation/resize, service loss, explicit recovery, forced session closure,
+app restart and reboot still require the remaining installed-APK checks below.
+Do not stop Shizuku while the active development session depends on it.
 
 On the installed APK, validate:
 

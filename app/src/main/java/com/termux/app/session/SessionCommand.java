@@ -3,7 +3,7 @@ package com.termux.app.session;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Literal argv/environment transport across run-as, which replaces HOME, PATH and SHELL. */
+/** Literal argv/environment transport across run-as and Android's secure environment filtering. */
 final class SessionCommand {
     private SessionCommand() {}
 
@@ -22,10 +22,11 @@ final class SessionCommand {
             if (equals < 1 || entry.indexOf('\0') >= 0 || !entry.substring(0, equals).matches("[A-Za-z_][A-Za-z0-9_]*"))
                 throw new IllegalArgumentException("Invalid environment key");
             // Other entries travel in execve's environment, not in a process-list-visible shell argument.
+            // Privileged run-as startup strips TMPDIR; restore it here after dropping to the app UID.
             String key = entry.substring(0, equals);
             if (key.startsWith("LD_") || key.startsWith("TERMUX_EXEC__") || key.equals("HOME")
                 || key.equals("PATH") || key.equals("SHELL") || key.equals("USER")
-                || key.equals("LOGNAME") || key.equals("IFS"))
+                || key.equals("LOGNAME") || key.equals("IFS") || key.equals("TMPDIR"))
                 out.append("export ").append(entry, 0, equals + 1).append(quote(entry.substring(equals + 1))).append('\n');
         }
         out.append("cd ").append(quote(cwd)).append('\n');

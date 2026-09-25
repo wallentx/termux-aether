@@ -3,9 +3,12 @@
 **Legacy workaround; retirement pending installed-APK validation.** Commit
 `bcb452a54ae494bdc4bda09f97d05a55ef29cee3` added this manual build/package workflow;
 it does not bundle a custom Go toolchain into the APK or make it a CI dependency.
-Original Termux Go and Gum passed the Shizuku + `run-as` component probes, so
-normal sessions are intended to return to the upstream packages. The new APK
-has not yet passed the complete installed-app validation. Recovery shells and
+Original Termux Go and Gum passed the Shizuku + `run-as` component probes and
+the main execution checks in installed APK `8012086`, so normal sessions are
+intended to return to the upstream packages. Installed checks found a `TMPDIR`
+restoration bug (fix pending APK validation) and confirmed that stock Go cannot
+directly execute a script whose interpreter is `/usr/bin/env`; Termux-prefix
+shebangs work. The new APK has not yet passed the complete installed-app validation. Recovery shells and
 non-terminal `AppShell` tasks still use the legacy launcher.
 
 Retirement order:
