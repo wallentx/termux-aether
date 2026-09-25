@@ -375,6 +375,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     @Override
     public void onDestroy() {
+        if (com.termux.app.session.SessionManager.required(this))
+            com.termux.app.session.SessionManager.get(this).dismissPrompt();
         super.onDestroy();
 
         Logger.logDebug(LOG_TAG, "onDestroy");

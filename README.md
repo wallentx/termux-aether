@@ -57,7 +57,8 @@ archive benchmark. This is a packaging-tool improvement, not terminal startup ti
   converted. Pacman here manages Termux packages; it does not turn Android into Arch.
 - **Native Linux binary compatibility.** The bundled **Aether** runtime runs
   supported dynamically linked Linux ARM64/glibc programs directly from Termux,
-  without PRoot, Arch, or Shizuku. It provides Android-backed DNS, common
+  without PRoot or Arch. The compatibility runtime itself does not need Shizuku;
+  normal terminal sessions use the Shizuku execution service. It provides Android-backed DNS, common
   certificate-path mappings, device identity, and mixed Linux/Android child-process
   handling. A complete Geekbench CPU run has passed in the native app context.
 - **An optional real Arch VM.** The matching API companion runs Arch Linux ARM
@@ -73,6 +74,7 @@ archive benchmark. This is a packaging-tool improvement, not terminal startup ti
 | Component | Included or separate? |
 | --- | --- |
 | Terminal app, Monet theming, Pacman bootstrap | Included in the default ARM64 APK |
+| Shizuku-backed terminal sessions and shared-storage bridge | Included; requires the separately installed, running Shizuku service |
 | Aether glibc 2.44 runtime, `aether-run`, and execution probe | Included and installed when Termux opens |
 | Device capabilities, thermal diagnostics, Shizuku access, and Arch VM control | Separate [Termux-Æther:API companion](https://github.com/wallentx/termux-aether-api) and [CLI package](https://github.com/wallentx/termux-aether-api-package/tree/dev) |
 | Arch kernel/root filesystem and networking helper | Separate guest artifact and setup; not embedded in the terminal APK |
@@ -118,7 +120,13 @@ AVF-versus-PRoot speedup has not been established.
    compatible signature preserves the existing environment. An incompatible
    installation needs a backup and a planned migration; do not uninstall it just
    to try this fork. APK updates do not convert an APT prefix to Pacman.
-3. For device integration or Arch, follow the
+3. Install and start [Shizuku](https://shizuku.rikka.app/guide/setup/), then authorize
+   Aether's connection prompt. Normal sessions on modern Android run through
+   `run-as` with the Termux UID, allowing ordinary native execution without
+   rebuilding every Go program. If Shizuku is unavailable, setup is shown instead
+   of silently changing execution mode. A recovery shell remains explicitly
+   available. On an unrooted device, restart Shizuku after reboot.
+4. For device integration or Arch, follow the
    [API companion setup](https://github.com/wallentx/termux-aether-api#setup).
    The app and companion must use matching signing certificates. Arch additionally
    needs a supported Android virtualization build, an authorized Shizuku service,
@@ -127,6 +135,13 @@ AVF-versus-PRoot speedup has not been established.
 These are development builds, currently using Termux's public debug test key,
 not a private release-signing identity. Obtain both APKs from these repositories.
 The project name does not change Android package IDs, data paths, or CLI names.
+
+`run-as` requires a debuggable APK, so the release build type also keeps that
+flag. Sessions preserve Android's runtime environment and use a dedicated PTY
+service for exit status and cleanup. Shared storage is exposed through
+`~/storage` shortcuts and `$EXTERNAL_STORAGE`; custom shortcuts are preserved.
+Literal `/sdcard` and `/storage/emulated/0` paths are not transparently remapped.
+See [session validation and limitations](scripts/session-validate/README.md).
 
 The default build is tailored to ARM64 Pixel testing; other ABIs and APT bootstraps
 remain available through [explicit build profiles](docs/BUILD_PROFILES.md).

@@ -28,6 +28,7 @@ ext {
 }
 
 android {
+    buildFeatures { aidl true }
     namespace "com.termux"
 
     if (pixelProbe) {
@@ -121,6 +122,8 @@ android {
 
     buildTypes {
         release {
+            // Android run-as requires debuggable, including for the release execution service.
+            debuggable true
             minifyEnabled true
             shrinkResources false // Reproducible builds
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -205,6 +208,8 @@ if (aetherEnabled) {
 }
 
 dependencies {
+    implementation "dev.rikka.shizuku:api:13.1.5"
+    implementation "dev.rikka.shizuku:provider:13.1.5"
     testImplementation "junit:junit:4.13.2"
     testImplementation "org.robolectric:robolectric:4.10"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:1.1.5"

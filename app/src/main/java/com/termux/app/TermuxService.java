@@ -593,8 +593,19 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         // If the execution command was started for a plugin, only then will the stdout be set
         // Otherwise if command was manually started by the user like by adding a new terminal session,
         // then no need to set stdout
+        boolean remoteSession = !executionCommand.isFailsafe
+            && com.termux.app.session.SessionManager.required(this);
+        if (remoteSession && !com.termux.app.session.SessionManager.get(this).isReady()) {
+            executionCommand.setStateFailed(1, "Shizuku is required. Open Termux and connect Shizuku before starting a session.");
+            if (executionCommand.isPluginExecutionCommand)
+                TermuxPluginUtils.processPluginExecutionCommandError(this, LOG_TAG, executionCommand, false);
+            return null;
+        }
         TermuxSession newTermuxSession = TermuxSession.execute(this, executionCommand, getTermuxTerminalSessionClient(),
-            this, new TermuxShellEnvironment(), null, executionCommand.isPluginExecutionCommand);
+            this, remoteSession ? new com.termux.app.session.SessionEnvironment() : new TermuxShellEnvironment(),
+            null, executionCommand.isPluginExecutionCommand);
+        if (newTermuxSession != null && remoteSession)
+            newTermuxSession.getTerminalSession().setProcessFactory(com.termux.app.session.SessionManager.get(this).factory());
         if (newTermuxSession == null) {
             Logger.logError(LOG_TAG, "Failed to execute new TermuxSession command for:\n" + executionCommand.getCommandIdAndLabelLogString());
             // If the execution command was started for a plugin, then process the error
