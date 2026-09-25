@@ -1,5 +1,29 @@
 # Aether Go and Gum
 
+**Legacy workaround; retirement pending installed-APK validation.** Commit
+`bcb452a54ae494bdc4bda09f97d05a55ef29cee3` added this manual build/package workflow;
+it does not bundle a custom Go toolchain into the APK or make it a CI dependency.
+Original Termux Go and Gum passed the Shizuku + `run-as` component probes, so
+normal sessions are intended to return to the upstream packages. The new APK
+has not yet passed the complete installed-app validation. Recovery shells and
+non-terminal `AppShell` tasks still use the legacy launcher.
+
+Retirement order:
+
+1. Pass the installed-APK [session checks](../session-validate/README.md) with
+   original packages: pure Go and cgo builds, child processes, re-exec, scripts,
+   `go test`, and interactive Gum. Check required background/recovery workloads
+   separately; a successful shell probe does not validate those paths.
+2. Restore upstream `golang` and `gum` with a Pacman transaction, preserving
+   rollback packages, GOPATH, module caches and configuration. Reverting Git
+   source does not undo an already-installed package replacement.
+3. Remove the toolchain patch/bootstrap/build/packaging machinery from this
+   directory, retaining the general execution regression probes. Do not rebuild
+   all existing Go binaries just to remove this workaround.
+
+Until those checks pass, keep the currently installed replacements working. The
+instructions below document the legacy workflow, not the normal-session setup.
+
 Optional native packages for the Android/ARM64 Aether app. They replace `golang`
 and `gum` through Pacman, preserving package ownership and the user's GOPATH,
 module cache, projects, and Go configuration. They do not require Arch, PRoot,
