@@ -181,7 +181,13 @@ public final class SessionManager {
             ISessionService current = service;
             if (current == null || !isReady())
                 throw new java.io.IOException("Shizuku is required. Open Termux and connect Shizuku before starting a background job.");
-            return new BackgroundProcess(current, command, SessionStorage.workingDirectory(cwd), environment);
+            final String workingDirectory;
+            try {
+                workingDirectory = SessionStorage.workingDirectory(cwd);
+            } catch (Exception error) {
+                throw new java.io.IOException("Cannot prepare background working directory", error);
+            }
+            return new BackgroundProcess(current, command, workingDirectory, environment);
         };
     }
 }
