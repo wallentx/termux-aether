@@ -60,6 +60,31 @@ public final class SessionUserService extends ISessionService.Stub {
         if (session != null) session.stop();
     }
 
+    @Override public BackgroundHandle startBackground(String executable, String cwd, String[] argv,
+                                                       String[] environment, ISessionCallback callback) {
+        checkCaller();
+        if (callback == null) throw new IllegalArgumentException("Missing job owner");
+        String script = SessionCommand.script(executable, cwd, argv, environment);
+        int[] child = SessionNative.startPipes(packageName, script, SessionCommand.bootstrapEnvironment(environment));
+        Session session = new Session(child[0], -1, callback);
+        BackgroundHandle handle = new BackgroundHandle(child[0], session.token,
+            ParcelFileDescriptor.adoptFd(child[1]), ParcelFileDescriptor.adoptFd(child[2]),
+            ParcelFileDescriptor.adoptFd(child[3]));
+        sessions.put(session.token, session);
+        try {
+            callback.asBinder().linkToDeath(session, 0);
+            new Thread(session::reap, "aether-background-" + session.pid).start();
+            // Parcelable return-value transfer closes these service-side ends after marshaling.
+            // In particular, retaining a second stdin writer would prevent EOF reaching the job.
+            return handle;
+        } catch (RemoteException error) {
+            handle.close();
+            session.stop();
+            new Thread(session::reap, "aether-background-cleanup").start();
+            throw new IllegalStateException("Cannot attach background job", error);
+        }
+    }
+
     @Override public String getCwd(String token) {
         checkCaller();
         Session session = sessions.get(token);
@@ -103,7 +128,7 @@ public final class SessionUserService extends ISessionService.Stub {
 
         Session(int pid, int fd, ISessionCallback callback) {
             this.pid = pid;
-            master = ParcelFileDescriptor.adoptFd(fd);
+            master = fd < 0 ? null : ParcelFileDescriptor.adoptFd(fd);
             this.callback = callback;
         }
 
@@ -127,10 +152,11 @@ public final class SessionUserService extends ISessionService.Stub {
             SessionNative.awaitExit(pid);
             int status;
             synchronized (this) {
-                signal(false);
+                // Background descendants must not retain output pipes after the leader exits.
+                signal(master == null);
                 status = SessionNative.finish(pid);
                 finished = true;
-                try { master.close(); } catch (IOException ignored) {}
+                if (master != null) try { master.close(); } catch (IOException ignored) {}
             }
             sessions.remove(token, this);
             try { callback.asBinder().unlinkToDeath(this, 0); }

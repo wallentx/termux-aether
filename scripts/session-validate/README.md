@@ -1,10 +1,11 @@
 # Shizuku session validation
 
-Normal SDK-29+ Aether sessions require the session UserService. Recovery sessions
-retain the legacy launcher. Do not replay failed commands through another backend.
+Normal SDK-29+ Aether sessions and TermuxService background commands require the
+session UserService. Recovery sessions retain the legacy launcher. Do not replay
+failed commands through another backend.
 
 Run `./gradlew test` and build the APK in CI. Focused tests are
-`SessionCommandTest` and `SessionStorageTest`. `NativeSessionProbe.java` can be
+`SessionCommandTest`, `SessionStorageTest` and `AppShellBackgroundTest`. `NativeSessionProbe.java` can be
 compiled alongside `SessionNative`, `SessionSignals`, and `SessionCommand`, converted to DEX, and
 run through Shizuku's shell UID with the new `libaether-session.so` in a private
 temporary directory under `/data/local/tmp`. Its first argument is that directory;
@@ -152,6 +153,50 @@ The storage bridge holds a directory FD in the app process and publishes a
 the app's storage mount across subprocesses that close inherited descriptors.
 It does not grant new Android storage permissions or mount over `/sdcard`.
 
-This change routes terminal sessions, including plugin requests for a terminal.
-Non-terminal `AppShell` background tasks retain their existing runner. Keep the
-installed compatibility packages until those workloads have also been validated.
+This change routes terminal sessions and TermuxService background jobs, including
+plugin commands, through Shizuku. App-internal callers that invoke `AppShell`
+directly without a process factory retain their existing launcher (for example,
+setup operations that precede the session service). Keep the installed
+compatibility packages until the required workloads have also been validated.
+
+### Background pipe implementation (installed validation pending)
+
+The background runner uses the same owner-checked UserService and run-as command
+transport as terminal sessions, with three independent pipes instead of a PTY.
+`BackgroundProcess` adapts the Binder handle/callback to Java's `Process` API;
+`AppShell` keeps its existing result collectors and plugin delivery. Empty stdin
+now closes immediately to deliver EOF; supplied stdin retains AppShell's existing
+trailing newline. Signals use the service's same-UID helper, with signal 9
+reported as exit 137. The service kills remaining members of the background
+job's session when its leader exits so they cannot keep its pipes open; processes
+that deliberately create a separate session are outside that cleanup scope.
+There is no local execution fallback or retry if Shizuku is unavailable.
+
+Component validation on the Pixel, 2026-09-26:
+
+| Check | Result |
+| --- | --- |
+| Native C, Java service/adapter, generated AIDL | Strict C compilation and focused Java compilation passed |
+| Actual native background launcher | 256 KiB binary stdin/stdout, separate stderr, no TTY, empty-input EOF, exit 23, missing-command exit 127, runas_app identity, original Go/Gum and stock-built Go child launch passed |
+| Native lifecycle | Cancellation -9, same-session descendant cleanup and output EOF passed |
+| Java Process adapter through generated AIDL Proxy/Stub parcels | Literal arguments, descriptor ownership/EOF, timed wait, early exit, signal-to-137 mapping, service-death wait/read unblocking, completed output preservation passed |
+| Terminal regression | Existing native PTY exit, UTF-8, EOF, cancellation and descendant cleanup probe passed |
+
+`PipeSessionProbe.java` takes five arguments: shell staging directory, app staging
+directory, original Go root, original Gum executable, and the stock-built
+`scripts/go/probe.go` executable. Stage read-only DEX and `libaether-session.so`
+in both directories, as for `NativeSessionProbe`; execute as Shizuku shell. It
+uses real native children but does not start the installed app's background runner.
+`BackgroundProcessProbe.java` uses a deterministic fake service with real pipes
+and generated AIDL parcel transport to exercise the adapter on Android. Compile
+it with the service/adapter classes and `AppShellProcess`, convert to read-only
+DEX, and run via `app_process`. It neither stops nor restarts the live Shizuku
+service. Require each probe's final `PASS` marker, not the rish transport status.
+
+Logs are saved on the Pixel in
+`~/.local/state/aether-session-implementation/background-pipes-20260926/`.
+The new Robolectric `AppShellBackgroundTest` covers factory routing, stdin EOF,
+separate results, supplied-input compatibility, failed-backend handling, and the
+cancel-after-marking-failed regression; it still needs the CI test run. The full
+APK build and installed RUN_COMMAND/plugin validation remain pending. Do not
+replace the installed Go/Gum packages based on these component probes alone.

@@ -479,8 +479,10 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         if (Logger.getLogLevel() >= Logger.LOG_LEVEL_VERBOSE)
             Logger.logVerboseExtended(LOG_TAG, executionCommand.toString());
 
+        boolean remoteTask = com.termux.app.session.SessionManager.required(this);
         AppShell newTermuxTask = AppShell.execute(this, executionCommand, this,
-            new TermuxShellEnvironment(), null,false);
+            remoteTask ? new com.termux.app.session.SessionEnvironment() : new TermuxShellEnvironment(),
+            null, false, remoteTask ? com.termux.app.session.SessionManager.get(this).backgroundFactory() : null);
         if (newTermuxTask == null) {
             Logger.logError(LOG_TAG, "Failed to execute new TermuxTask command for:\n" + executionCommand.getCommandIdAndLabelLogString());
             // If the execution command was started for a plugin, then process the error

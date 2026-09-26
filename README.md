@@ -74,7 +74,7 @@ archive benchmark. This is a packaging-tool improvement, not terminal startup ti
 | Component | Included or separate? |
 | --- | --- |
 | Terminal app, Monet theming, Pacman bootstrap | Included in the default ARM64 APK |
-| Shizuku-backed terminal sessions and shared-storage bridge | Included; requires the separately installed, running Shizuku service |
+| Shizuku-backed terminal/background commands and shared-storage bridge | Included; requires the separately installed, running Shizuku service |
 | Aether glibc 2.44 runtime, `aether-run`, and execution probe | Included and installed when Termux opens |
 | Device capabilities, thermal diagnostics, Shizuku access, and Arch VM control | Separate [Termux-Æther:API companion](https://github.com/wallentx/termux-aether-api) and [CLI package](https://github.com/wallentx/termux-aether-api-package/tree/dev) |
 | Arch kernel/root filesystem and networking helper | Separate guest artifact and setup; not embedded in the terminal APK |
@@ -125,7 +125,8 @@ AVF-versus-PRoot speedup has not been established.
    `run-as` with the Termux UID, allowing ordinary native execution without
    rebuilding every Go program. If Shizuku is unavailable, setup is shown instead
    of silently changing execution mode. A recovery shell remains explicitly
-   available. On an unrooted device, restart Shizuku after reboot.
+   available. Background commands also require the service and report an error
+   when it is unavailable. On an unrooted device, restart Shizuku after reboot.
 4. For device integration or Arch, follow the
    [API companion setup](https://github.com/wallentx/termux-aether-api#setup).
    The app and companion must use matching signing certificates. Arch additionally
@@ -138,7 +139,8 @@ The project name does not change Android package IDs, data paths, or CLI names.
 
 `run-as` requires a debuggable APK, so the release build type also keeps that
 flag. Sessions preserve Android's runtime environment and use a dedicated PTY
-service for exit status and cleanup. Shared storage is exposed through
+service for exit status and cleanup. Background commands use separate stdin,
+stdout and stderr pipes through the same service. Shared storage is exposed through
 `~/storage` shortcuts and `$EXTERNAL_STORAGE`; custom shortcuts are preserved.
 Literal `/sdcard` and `/storage/emulated/0` paths are not transparently remapped.
 See [session validation and limitations](scripts/session-validate/README.md).

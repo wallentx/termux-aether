@@ -44,7 +44,7 @@ public final class SessionManager {
     private SessionManager(Context context) {
         this.context = context;
         args = new Shizuku.UserServiceArgs(new ComponentName(context, SessionUserService.class))
-            .daemon(false).processNameSuffix("aether_sessions").debuggable(false).version(1);
+            .daemon(false).processNameSuffix("aether_sessions").debuggable(false).version(2);
         Shizuku.addBinderReceivedListenerSticky(() -> main.post(() -> connect(false)));
         Shizuku.addBinderDeadListener(() -> main.post(() -> {
             connecting = false;
@@ -173,6 +173,15 @@ public final class SessionManager {
                 throw new IllegalStateException("Shizuku session service is unavailable");
             return new SessionProcess(current, executable, SessionStorage.workingDirectory(cwd), argv,
                 environment, rows, columns, width, height);
+        };
+    }
+
+    public com.termux.shared.shell.command.runner.app.AppShellProcess.Factory backgroundFactory() {
+        return (command, environment, cwd) -> {
+            ISessionService current = service;
+            if (current == null || !isReady())
+                throw new java.io.IOException("Shizuku is required. Open Termux and connect Shizuku before starting a background job.");
+            return new BackgroundProcess(current, command, SessionStorage.workingDirectory(cwd), environment);
         };
     }
 }

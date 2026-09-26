@@ -16,8 +16,11 @@ for the scope, backups and package-update limitation. On 2026-09-26, a real
 original Go and Gum while both installed Aether replacements passed. Normal
 terminal controls passed with the same original binaries. See the
 [background execution results](../session-validate/README.md#background-execution-retirement-gate).
-Recovery shells and non-terminal `AppShell` tasks still use the legacy launcher;
-complete installed-app validation remains unfinished.
+That installed APK's recovery shells and non-terminal `AppShell` tasks use the
+legacy launcher. The subsequent pipe-based background implementation passes
+component probes with original Go/Gum, but still needs CI and installed-APK
+validation. Recovery and app-internal direct `AppShell` callers retain their
+legacy execution path; complete retirement remains gated on those workloads.
 
 Retirement order:
 
@@ -25,9 +28,9 @@ Retirement order:
    original packages: pure Go and cgo builds, child processes, re-exec, scripts,
    `go test`, and interactive Gum. Check required background/recovery workloads
    separately; a successful shell probe does not validate those paths.
-   The confirmed `AppShell` failure must be addressed before replacing packages;
-   moving that runner to Shizuku + `run-as` must preserve its non-terminal stdin,
-   separate stdout/stderr, exit status, cancellation and plugin result delivery.
+   Validate the new background runner in an installed APK before replacing
+   packages, including non-terminal stdin, separate stdout/stderr, exit status,
+   cancellation and plugin result delivery.
 2. Restore upstream `golang` and `gum` with a Pacman transaction, preserving
    rollback packages, GOPATH, module caches and configuration. Reverting Git
    source does not undo an already-installed package replacement.
