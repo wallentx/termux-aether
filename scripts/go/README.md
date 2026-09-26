@@ -1,19 +1,23 @@
 # Aether Go and Gum
 
-**Legacy workaround; retirement pending installed-APK validation.** Commit
+**Legacy workaround; retirement blocked by background execution.** Commit
 `bcb452a54ae494bdc4bda09f97d05a55ef29cee3` added this manual build/package workflow;
 it does not bundle a custom Go toolchain into the APK or make it a CI dependency.
 Original Termux Go and Gum passed the Shizuku + `run-as` component probes and
 the main execution checks in installed APK `8012086`, so normal sessions are
 intended to return to the upstream packages. Installed checks found a `TMPDIR`
-restoration bug (fix pending APK validation) and confirmed that stock Go cannot
+restoration bug (fixed and verified in installed APK `8a64440`) and confirmed that stock Go cannot
 directly execute a script whose interpreter is `/usr/bin/env`. The bundled
 `termux-fix-shebang` repairs installed scripts without modifying Go: the `env -S`
 fixture and five real package commands passed afterward with pure-Go and cgo
 probes. See [installed-script repair](../session-validate/README.md#installed-script-shebang-repair)
-for the scope, backups and package-update limitation. The new APK has not yet
-passed the complete installed-app validation. Recovery shells and
-non-terminal `AppShell` tasks still use the legacy launcher.
+for the scope, backups and package-update limitation. On 2026-09-26, a real
+`RUN_COMMAND` background task in installed APK `8a64440` reproduced failures in
+original Go and Gum while both installed Aether replacements passed. Normal
+terminal controls passed with the same original binaries. See the
+[background execution results](../session-validate/README.md#background-execution-retirement-gate).
+Recovery shells and non-terminal `AppShell` tasks still use the legacy launcher;
+complete installed-app validation remains unfinished.
 
 Retirement order:
 
@@ -21,6 +25,9 @@ Retirement order:
    original packages: pure Go and cgo builds, child processes, re-exec, scripts,
    `go test`, and interactive Gum. Check required background/recovery workloads
    separately; a successful shell probe does not validate those paths.
+   The confirmed `AppShell` failure must be addressed before replacing packages;
+   moving that runner to Shizuku + `run-as` must preserve its non-terminal stdin,
+   separate stdout/stderr, exit status, cancellation and plugin result delivery.
 2. Restore upstream `golang` and `gum` with a Pacman transaction, preserving
    rollback packages, GOPATH, module caches and configuration. Reverting Git
    source does not undo an already-installed package replacement.

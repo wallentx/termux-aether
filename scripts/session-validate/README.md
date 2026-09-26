@@ -48,7 +48,7 @@ transfer, rather than only a separately launched shell probe.
 | Original Go 1.27.1, Gum and gh executables | Start successfully; interactive Gum selected Beta and exited 0 |
 | Original Go compiler/runtime | Pure-Go and cgo builds, argv/identity, spawn/re-exec, native children, prefix shebangs, relative cwd, `go run`, and `go test` passed |
 | Storage and API | `~/storage/downloads` and `$EXTERNAL_STORAGE/Download` write/read/delete and `termux-battery-status` passed |
-| Temporary directory | Installed launcher lost `TMPDIR`; corrected command builder passed eight unit tests and a real run-as control/fix comparison; fixed APK validation remains pending |
+| Temporary directory | Installed launcher lost `TMPDIR`; corrected command builder passed eight unit tests and a real run-as control/fix comparison; installed APK `8a64440` restored `$PREFIX/tmp` and passed write/read/delete on 2026-09-26 |
 | Foreign script interpreter paths | Stock Go raw exec of `#!/usr/bin/env` failed; rewriting installed scripts with `termux-fix-shebang` passed, including `env -S` |
 
 Go's missing-TMPDIR diagnostic still built successfully with the stock package's
@@ -61,6 +61,49 @@ rerunning `go test .` from the package directory passed. Evidence is retained in
 Rotation/resize, service loss, explicit recovery, forced session closure,
 app restart and reboot still require the remaining installed-APK checks below.
 Do not stop Shizuku while the active development session depends on it.
+
+### Background execution retirement gate
+
+On 2026-09-26, installed APK `1000.0.0+8a64440` was tested through the actual
+`RunCommandService` with `RUN_COMMAND_BACKGROUND=true`. The intent was sent
+using Termux's `$PREFIX/bin/am` under its own UID, without granting permissions.
+Shizuku's shell UID lacks `com.termux.permission.RUN_COMMAND`; `/system/bin/am`
+under the app UID also fails its calling-package check. Neither failed launch
+was counted as a runtime test.
+
+The service launched a Python probe that recorded its UID, SELinux context,
+selected execution environment, and each command's stdout/stderr and exit status.
+The same probe ran in the normal installed terminal as the control. Both used
+UID 10445; their SELinux domains and launch environments differed.
+
+| Check | Normal terminal (`runas_app`) | Background task (`untrusted_app`) |
+| --- | --- | --- |
+| Original Go 1.27.1, explicit stock `GOROOT`, `go version` | Exit 0, expected version | Exit 2, executable path interpreted as an unknown command |
+| Original Gum, `--version` | Exit 0 | Exit 80, executable path interpreted as an unexpected argument |
+| Stock-built pure-Go identity/argument probe | Correct argv and executable path | Exit 0 but duplicated executable argument and `os.Executable()` returns Android's linker |
+| Stock-built cgo child-process probe | Child ran with expected arguments | Exit 2 after child launch failure |
+| Installed Aether Go and Gum version commands | Both exit 0 | Both exit 0 |
+
+The standalone copied `stock-go` without `GOROOT` also failed in the normal
+terminal because its trimmed build cannot locate the moved toolchain. That is
+not evidence of a launcher regression; the explicit-root comparison above
+isolates the background failure. Likewise, the pure-Go probe's zero exit status
+does not mean success: the shifted arguments prevented its requested spawn mode
+from running.
+
+Evidence and the probe script are saved on the Pixel at
+`~/.local/state/aether-session-implementation/retirement-8a644402/`
+(`normal-results.json`, `background-results.json`, `background_probe.py`).
+The background report confirms the linker preload and no normal-session backend
+marker. No installed packages were replaced and no custom toolchain machinery
+was removed. Recovery, service-loss and the other remaining UI/lifecycle checks
+were not validated by this probe.
+
+Retirement remains blocked until background execution supports the original
+binaries. A Shizuku + `run-as` background runner must preserve non-terminal stdin,
+separate stdout/stderr, exit status, cancellation and plugin result delivery;
+using the terminal PTY path alone is not an equivalent replacement. Explicit
+recovery behavior must also be settled before removing its compatibility tools.
 
 ### Installed-script shebang repair
 
