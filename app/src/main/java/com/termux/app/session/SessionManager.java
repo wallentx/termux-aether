@@ -34,7 +34,7 @@ public final class SessionManager {
     private final Shizuku.UserServiceArgs args;
     private volatile ISessionService service;
     private boolean connecting;
-    private int attempt;
+    private SessionConnection connection;
     private boolean requestingBinder;
     private int binderRequest;
     private boolean requestPermissionOnConnect;
@@ -59,7 +59,8 @@ public final class SessionManager {
             connect(requestPermissionOnConnect);
         }));
         Shizuku.addBinderDeadListener(() -> main.post(() -> {
-            connecting = false;
+            if (Shizuku.pingBinder()) return;
+            clearConnection();
             message = "Shizuku stopped. Start it again to open new sessions.";
             notifyChanged();
         }));
@@ -71,26 +72,54 @@ public final class SessionManager {
         });
     }
 
-    private final ServiceConnection connection = new ServiceConnection() {
+    private final class SessionConnection implements ServiceConnection {
+        private IBinder binder;
+        private IBinder.DeathRecipient deathRecipient;
+
         @Override public void onServiceConnected(ComponentName name, IBinder binder) {
             main.post(() -> {
+                if (connection != this) return;
+                unlinkDeathRecipient();
+                this.binder = binder;
+                deathRecipient = () -> main.post(() -> disconnected(this, binder));
                 connecting = false;
                 service = ISessionService.Stub.asInterface(binder);
-                try { binder.linkToDeath(() -> main.post(() -> disconnected(binder)), 0); }
-                catch (RemoteException error) { disconnected(binder); return; }
+                try { binder.linkToDeath(deathRecipient, 0); }
+                catch (RemoteException error) { disconnected(this, binder); return; }
                 message = "Connected.";
                 notifyChanged();
             });
         }
         @Override public void onServiceDisconnected(ComponentName name) {
-            main.post(() -> disconnected(null));
+            main.post(() -> disconnected(this, null));
         }
-    };
 
-    private void disconnected(IBinder binder) {
-        if (binder != null && service != null && service.asBinder() != binder) return;
+        private void unlinkDeathRecipient() {
+            if (binder != null && deathRecipient != null) {
+                try { binder.unlinkToDeath(deathRecipient, 0); } catch (RuntimeException ignored) {}
+            }
+            binder = null;
+            deathRecipient = null;
+        }
+
+        private void detach() {
+            unlinkDeathRecipient();
+            // Remove this listener without stopping the service or its running sessions.
+            try { Shizuku.unbindUserService(args, this, false); } catch (RuntimeException ignored) {}
+        }
+    }
+
+    private void clearConnection() {
+        SessionConnection previous = connection;
+        connection = null;
         service = null;
         connecting = false;
+        if (previous != null) previous.detach();
+    }
+
+    private void disconnected(SessionConnection disconnected, IBinder binder) {
+        if (connection != disconnected || (binder != null && disconnected.binder != binder)) return;
+        clearConnection();
         message = "Session service disconnected. Reconnect to open a new session.";
         notifyChanged();
     }
@@ -124,21 +153,22 @@ public final class SessionManager {
                 }
             } else {
                 requestPermissionOnConnect = false;
+                clearConnection();
+                final SessionConnection currentConnection = new SessionConnection();
+                connection = currentConnection;
                 connecting = true;
-                final int currentAttempt = ++attempt;
                 message = "Connecting to the session service...";
-                Shizuku.bindUserService(args, connection);
+                Shizuku.bindUserService(args, currentConnection);
                 main.postDelayed(() -> {
-                    if (connecting && currentAttempt == attempt && !isReady()) {
-                        connecting = false;
-                        try { Shizuku.unbindUserService(args, connection, false); } catch (RuntimeException ignored) {}
+                    if (connection == currentConnection && connecting) {
+                        clearConnection();
                         message = "Session service did not connect within 15 seconds. Retry Connect.";
                         notifyChanged();
                     }
                 }, 15000);
             }
         } catch (RuntimeException error) {
-            connecting = false;
+            clearConnection();
             message = "Cannot connect to Shizuku: " + error.getMessage();
         }
         notifyChanged();

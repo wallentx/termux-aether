@@ -15,6 +15,8 @@ import android.os.Looper;
 import android.os.Parcel;
 import com.termux.shared.termux.TermuxConstants;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -27,6 +29,7 @@ import org.robolectric.annotation.LooperMode;
 import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowActivity;
 import org.robolectric.shadows.ShadowAlertDialog;
+import org.robolectric.shadows.ShadowApplication;
 import org.robolectric.shadows.ShadowBinder;
 import org.robolectric.shadows.ShadowLooper;
 import org.robolectric.shadows.ShadowPackageManager;
@@ -42,17 +45,20 @@ public class SessionManagerTest {
     private static final int MANAGER_UID = 12345;
     private Activity activity;
     private ShadowActivity activityShadow;
+    private ShadowApplication applicationShadow;
     private ShadowPackageManager packages;
     private ShadowLooper main;
     private SessionManager manager;
     private AlertDialog dialog;
     private int retries;
+    private int requestsRead;
 
     @Before public void setUp() {
         ShadowShizuku.reset();
         ReflectionHelpers.setStaticField(SessionManager.class, "instance", null);
         activity = Robolectric.buildActivity(Activity.class).setup().get();
         activityShadow = Shadow.extract(activity);
+        applicationShadow = Shadow.extract(activity.getApplication());
         packages = Shadow.extract(activity.getPackageManager());
         main = Shadow.extract(Looper.getMainLooper());
         activity.getApplicationInfo().flags |= ApplicationInfo.FLAG_DEBUGGABLE;
@@ -71,6 +77,7 @@ public class SessionManagerTest {
         Intent request = nextRequest();
         assertEquals(ShizukuProvider.MANAGER_APPLICATION_ID, request.getPackage());
         assertEquals(TermuxConstants.SHIZUKU_REQUEST_BINDER_ACTION, request.getAction());
+        assertNotEquals(0, request.getFlags() & Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
         assertTrue(reply(request, new Binder()));
         assertEquals(activity.getPackageName(), ShadowShizuku.attachedPackage);
         assertEquals(1, ShadowShizuku.binds);
@@ -128,6 +135,7 @@ public class SessionManagerTest {
         clickConnect();
         assertTrue(message().contains("Requesting a connection"));
         assertNull(activityShadow.getNextStartedActivity());
+        assertNoRequest();
         main.idleFor(Duration.ofSeconds(15));
         assertTrue(message().contains("did not respond"));
         clickConnect();
@@ -159,6 +167,7 @@ public class SessionManagerTest {
         main.idle();
         assertTrue(manager.isReady());
         assertNull(activityShadow.getNextStartedActivity());
+        assertNoRequest();
         assertEquals(1, retries);
     }
 
@@ -167,6 +176,7 @@ public class SessionManagerTest {
         showPrompt();
         assertTrue(message().contains("Install the Shizuku app"));
         assertNull(activityShadow.getNextStartedActivity());
+        assertNoRequest();
         clickConnect();
         assertTrue(message().contains("Install the Shizuku app"));
     }
@@ -190,6 +200,127 @@ public class SessionManagerTest {
         showPrompt();
         assertTrue(message().contains("Install a debuggable Aether build"));
         assertNull(activityShadow.getNextStartedActivity());
+        assertNoRequest();
+    }
+
+    @Test public void staleDisconnectAndDeathDoNotClearReconnectedService() {
+        ShadowShizuku.binder = new Binder();
+        ShadowShizuku.autoConnect = false;
+        showPrompt();
+        ServiceConnection old = ShadowShizuku.connections.get(0);
+        DeathTrackingBinder oldBinder = new DeathTrackingBinder();
+        old.onServiceConnected(serviceName(), oldBinder);
+        main.idle();
+        assertTrue(manager.isReady());
+        IBinder.DeathRecipient oldDeath = oldBinder.recipient;
+
+        old.onServiceDisconnected(serviceName());
+        main.idle();
+        assertFalse(manager.isReady());
+        assertEquals(1, ShadowShizuku.detached.size());
+        assertSame(old, ShadowShizuku.detached.get(0));
+        showPrompt();
+        ServiceConnection current = ShadowShizuku.connections.get(1);
+        assertNotSame(old, current);
+        Binder currentBinder = new Binder();
+        current.onServiceConnected(serviceName(), currentBinder);
+        main.idle();
+
+        old.onServiceDisconnected(serviceName());
+        oldDeath.binderDied();
+        main.idle();
+        assertConnectedTo(currentBinder);
+        assertEquals(2, retries);
+    }
+
+    @Test public void timedOutConnectionCannotReplaceNewService() {
+        ShadowShizuku.binder = new Binder();
+        ShadowShizuku.autoConnect = false;
+        showPrompt();
+        ServiceConnection old = ShadowShizuku.connections.get(0);
+        main.idleFor(Duration.ofSeconds(15));
+        assertTrue(message().contains("did not connect"));
+        assertSame(old, ShadowShizuku.detached.get(0));
+        clickConnect();
+        ServiceConnection current = ShadowShizuku.connections.get(1);
+
+        old.onServiceConnected(serviceName(), new Binder());
+        main.idle();
+        assertFalse(manager.isReady());
+        assertTrue(dialog.isShowing());
+        Binder currentBinder = new Binder();
+        current.onServiceConnected(serviceName(), currentBinder);
+        main.idle();
+        old.onServiceConnected(serviceName(), new Binder());
+        old.onServiceDisconnected(serviceName());
+        main.idleFor(Duration.ofSeconds(15));
+        assertConnectedTo(currentBinder);
+        assertEquals(1, retries);
+    }
+
+    @Test public void oldTimeoutDoesNotCancelPendingRetry() {
+        ShadowShizuku.binder = new Binder();
+        ShadowShizuku.autoConnect = false;
+        showPrompt();
+        ServiceConnection old = ShadowShizuku.connections.get(0);
+        main.idleFor(Duration.ofSeconds(6));
+        old.onServiceDisconnected(serviceName());
+        main.idle();
+        clickConnect();
+        ServiceConnection current = ShadowShizuku.connections.get(1);
+        main.idleFor(Duration.ofSeconds(9));
+        assertTrue(message().contains("Connecting to the session service"));
+        assertEquals(1, ShadowShizuku.detached.size());
+        Binder currentBinder = new Binder();
+        current.onServiceConnected(serviceName(), currentBinder);
+        main.idle();
+        assertConnectedTo(currentBinder);
+    }
+
+    @Test public void shizukuDeathDiscardsPendingConnection() {
+        ShadowShizuku.binder = new Binder();
+        ShadowShizuku.autoConnect = false;
+        showPrompt();
+        ServiceConnection old = ShadowShizuku.connections.get(0);
+        ShadowShizuku.binder = null;
+        ShadowShizuku.deadListener.onBinderDead();
+        main.idle();
+        assertTrue(message().contains("Shizuku stopped"));
+        assertSame(old, ShadowShizuku.detached.get(0));
+        old.onServiceConnected(serviceName(), new Binder());
+        main.idle();
+        assertNull(ReflectionHelpers.getField(manager, "service"));
+
+        ShadowShizuku.binder = new Binder();
+        clickConnect();
+        Binder currentBinder = new Binder();
+        ShadowShizuku.connections.get(1).onServiceConnected(serviceName(), currentBinder);
+        main.idle();
+        assertConnectedTo(currentBinder);
+    }
+
+    @Test public void bindingFailureDiscardsQueuedConnection() {
+        ShadowShizuku.binder = new Binder();
+        ShadowShizuku.failBind = true;
+        showPrompt();
+        main.idle();
+        assertFalse(manager.isReady());
+        assertTrue(message().contains("Cannot connect to Shizuku"));
+        assertSame(ShadowShizuku.connections.get(0), ShadowShizuku.detached.get(0));
+        ShadowShizuku.failBind = false;
+        clickConnect();
+        main.idle();
+        assertTrue(manager.isReady());
+        assertEquals(1, retries);
+    }
+
+    private static ComponentName serviceName() { return new ComponentName("test", "SessionUserService"); }
+
+    private void assertConnectedTo(IBinder binder) {
+        assertTrue(manager.isReady());
+        ISessionService service = ReflectionHelpers.getField(manager, "service");
+        assertSame(binder, service.asBinder());
+        assertEquals("Connected.", message());
     }
 
     private void showPrompt() {
@@ -198,10 +329,12 @@ public class SessionManagerTest {
     }
 
     private Intent nextRequest() {
-        Intent intent = activityShadow.getNextStartedActivity();
-        assertNotNull(intent);
-        return intent;
+        List<Intent> broadcasts = applicationShadow.getBroadcastIntents();
+        assertTrue("Expected a Shizuku binder request broadcast", requestsRead < broadcasts.size());
+        return broadcasts.get(requestsRead++);
     }
+
+    private void assertNoRequest() { assertEquals(requestsRead, applicationShadow.getBroadcastIntents().size()); }
 
     private void clickConnect() { dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick(); }
 
@@ -222,12 +355,25 @@ public class SessionManagerTest {
         }
     }
 
+    private static class DeathTrackingBinder extends Binder {
+        IBinder.DeathRecipient recipient;
+        @Override public void linkToDeath(IBinder.DeathRecipient recipient, int flags) { this.recipient = recipient; }
+        @Override public boolean unlinkToDeath(IBinder.DeathRecipient recipient, int flags) {
+            this.recipient = null;
+            return true;
+        }
+    }
+
     @Implements(Shizuku.class)
     public static class ShadowShizuku {
         static IBinder binder;
         static String attachedPackage;
         static int permission, permissionRequests, permissionCode, binds;
+        static boolean autoConnect, failBind;
+        static final List<ServiceConnection> connections = new ArrayList<>();
+        static final List<ServiceConnection> detached = new ArrayList<>();
         static Shizuku.OnBinderReceivedListener binderListener;
+        static Shizuku.OnBinderDeadListener deadListener;
         static Shizuku.OnRequestPermissionResultListener permissionListener;
 
         static void reset() {
@@ -235,7 +381,12 @@ public class SessionManagerTest {
             attachedPackage = null;
             permission = PackageManager.PERMISSION_GRANTED;
             permissionRequests = permissionCode = binds = 0;
+            autoConnect = true;
+            failBind = false;
+            connections.clear();
+            detached.clear();
             binderListener = null;
+            deadListener = null;
             permissionListener = null;
         }
 
@@ -245,7 +396,9 @@ public class SessionManagerTest {
             binderListener = listener;
             if (binder != null) listener.onBinderReceived();
         }
-        @Implementation protected static void addBinderDeadListener(Shizuku.OnBinderDeadListener listener) {}
+        @Implementation protected static void addBinderDeadListener(Shizuku.OnBinderDeadListener listener) {
+            deadListener = listener;
+        }
         @Implementation protected static void addRequestPermissionResultListener(Shizuku.OnRequestPermissionResultListener listener) {
             permissionListener = listener;
         }
@@ -260,7 +413,14 @@ public class SessionManagerTest {
         }
         @Implementation protected static void bindUserService(Shizuku.UserServiceArgs args, ServiceConnection connection) {
             binds++;
-            connection.onServiceConnected(new ComponentName("test", "SessionUserService"), new Binder());
+            connections.add(connection);
+            if (autoConnect) connection.onServiceConnected(serviceName(), new Binder());
+            if (failBind) throw new IllegalStateException("Test bind failure");
+        }
+        @Implementation protected static void unbindUserService(Shizuku.UserServiceArgs args, ServiceConnection connection,
+            boolean remove) {
+            assertFalse("Detaching a callback must not stop running sessions", remove);
+            detached.add(connection);
         }
     }
 }
