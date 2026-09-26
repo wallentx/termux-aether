@@ -200,3 +200,33 @@ separate results, supplied-input compatibility, failed-backend handling, and the
 cancel-after-marking-failed regression; it still needs the CI test run. The full
 APK build and installed RUN_COMMAND/plugin validation remain pending. Do not
 replace the installed Go/Gum packages based on these component probes alone.
+
+### Service-death cleanup
+
+Each native launch has a monitor that owns the run-as child and an IPC socket
+whose other end belongs to the UserService. The monitor blocks in `poll()`;
+UserService death closes the socket and triggers the existing app-UID signal
+helper. It kills the leader and remaining members of its Linux session,
+including descendants that ignore SIGHUP or belong to another process group.
+Descendants that deliberately create a separate Linux session remain outside
+this cleanup scope. The monitor holds the child unreaped throughout cleanup,
+so its PID/session ID cannot be recycled and accidentally target another job.
+
+On normal exit, the monitor reports the original command status and waits for
+`finish()` before reaping. Cancellation and normal descendant cleanup retain
+the service's existing signaling path. No command is replayed after service
+loss, and no per-job Java VM is kept running by the monitor. UserService version
+3 ensures an APK upgrade does not retain a launcher loaded from older code.
+
+`ServiceDeathProbe.java` starts isolated launcher fixture processes through the
+Shizuku shell, then kills only those fixtures. Run it with shell and app staging
+directories containing the read-only DEX/native library, as for the probes
+above. It tests pipe and PTY leaders plus SIGHUP-ignoring descendants, compares
+process start times to avoid mistaking PID reuse for liveness, and requires the
+final `PASS` marker. It never stops the live Shizuku service or user sessions.
+The same probe can run against the previous launcher as a failure control.
+
+On the Pixel on 2026-09-26, both crash-cleanup cases and the existing native
+terminal exit/UTF-8/EOF/cancellation checks passed with the monitor. These are
+actual native component checks; full APK/Binder lifecycle validation remains
+separate. No performance improvement is claimed from this change.

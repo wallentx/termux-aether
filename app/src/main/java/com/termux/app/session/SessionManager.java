@@ -53,7 +53,7 @@ public final class SessionManager {
     private SessionManager(Context context) {
         this.context = context;
         args = new Shizuku.UserServiceArgs(new ComponentName(context, SessionUserService.class))
-            .daemon(false).processNameSuffix("aether_sessions").debuggable(false).version(2);
+            .daemon(false).processNameSuffix("aether_sessions").debuggable(false).version(3);
         Shizuku.addBinderReceivedListenerSticky(() -> main.post(() -> {
             requestingBinder = false;
             connect(requestPermissionOnConnect);

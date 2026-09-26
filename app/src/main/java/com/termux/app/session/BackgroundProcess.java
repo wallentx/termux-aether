@@ -52,6 +52,7 @@ final class BackgroundProcess extends AppShellProcess implements IBinder.DeathRe
     }
 
     @Override public synchronized void binderDied() {
+        // The native lifetime monitor terminates the job/session even if no handle was delivered.
         // A completed child may still have buffered output to drain; it no longer needs the service.
         if (exited.getCount() == 0) return;
         serviceLost = true;

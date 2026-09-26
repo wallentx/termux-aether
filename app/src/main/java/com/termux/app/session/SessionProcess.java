@@ -30,7 +30,10 @@ final class SessionProcess implements TerminalSessionProcess, IBinder.DeathRecip
         }
     }
 
-    @Override public void binderDied() { exited.countDown(); }
+    @Override public void binderDied() {
+        // The native lifetime monitor owns cleanup; it does not rely on PTY hangup.
+        exited.countDown();
+    }
     @Override public int getPid() { return handle.pid; }
     @Override public int takeMasterFd() { return handle.master.detachFd(); }
     @Override public int waitFor() {

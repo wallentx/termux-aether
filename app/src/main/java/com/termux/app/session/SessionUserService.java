@@ -25,7 +25,7 @@ public final class SessionUserService extends ISessionService.Stub {
         packageName = context.getPackageName();
         apkPath = context.getApplicationInfo().sourceDir;
         nativeDirectory = context.getApplicationInfo().nativeLibraryDir;
-        SessionNative.load(nativeDirectory);
+        SessionNative.load(nativeDirectory, apkPath);
     }
 
     private void checkCaller() {

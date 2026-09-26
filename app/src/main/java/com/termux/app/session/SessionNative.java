@@ -3,7 +3,13 @@ package com.termux.app.session;
 /** Loaded explicitly because a Shizuku UserService does not have an app's native search path. */
 @androidx.annotation.Keep
 final class SessionNative {
-    static synchronized void load(String directory) { System.load(directory + "/libaether-session.so"); }
+    static void load(String directory) { load(directory, System.getProperty("java.class.path")); }
+    static synchronized void load(String directory, String classPath) {
+        System.load(directory + "/libaether-session.so");
+        configureCleanup(directory.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            classPath.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+    private static native void configureCleanup(byte[] directory, byte[] classPath);
     static int[] start(String packageName, String script, String[] environment,
                        int rows, int columns, int cellWidth, int cellHeight) {
         return start(packageName, script, environment, rows, columns, cellWidth, cellHeight, true);
