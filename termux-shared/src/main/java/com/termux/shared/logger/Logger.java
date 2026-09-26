@@ -11,8 +11,9 @@ import androidx.annotation.NonNull;
 import com.termux.shared.R;
 import com.termux.shared.data.DataUtils;
 
+import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.Writer;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -49,12 +50,6 @@ public class Logger {
      * limit if tag is already known.
      */
     public static final int LOGGER_ENTRY_MAX_SAFE_PAYLOAD = 4000; // 4000 bytes
-
-    /** Bound error rendering before log splitting, including recursive suppressed exceptions. */
-    public static final int MAX_STACK_TRACE_CHARACTERS = 64 * 1024;
-    public static final int MAX_STACK_TRACES = 16;
-    private static final String STACK_TRACE_TRUNCATED = "\n[Stack trace truncated]\n";
-    private static final String STACK_TRACES_OMITTED = "[Additional stack traces omitted]";
 
 
 
@@ -313,39 +308,20 @@ public class Logger {
     public static String getStackTraceString(Throwable throwable) {
         if (throwable == null) return null;
 
-        StackTraceWriter writer = new StackTraceWriter();
+        String stackTraceString = null;
+
         try {
-            throwable.printStackTrace(new PrintWriter(writer));
-        } catch (StackTraceLimitReached ignored) {
-            // Stop traversing large exception trees, not just retaining their rendered text.
-            return writer.toString() + STACK_TRACE_TRUNCATED;
+            StringWriter errors = new StringWriter();
+            PrintWriter pw = new PrintWriter(errors);
+            throwable.printStackTrace(pw);
+            pw.close();
+            stackTraceString = errors.toString();
+            errors.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
-        return writer.toString();
-    }
-
-    private static final class StackTraceLimitReached extends RuntimeException {
-        StackTraceLimitReached() { super(null, null, false, false); }
-    }
-
-    private static final class StackTraceWriter extends Writer {
-        private final StringBuilder text = new StringBuilder();
-
-        @Override public void write(char[] buffer, int offset, int count) {
-            int retained = Math.min(count, MAX_STACK_TRACE_CHARACTERS - text.length());
-            text.append(buffer, offset, retained);
-            if (retained < count) throw new StackTraceLimitReached();
-        }
-
-        @Override public void write(String value, int offset, int count) {
-            int retained = Math.min(count, MAX_STACK_TRACE_CHARACTERS - text.length());
-            text.append(value, offset, offset + retained);
-            if (retained < count) throw new StackTraceLimitReached();
-        }
-
-        @Override public void flush() {}
-        @Override public void close() {}
-        @Override public String toString() { return text.toString(); }
+        return stackTraceString;
     }
 
 
@@ -356,13 +332,10 @@ public class Logger {
 
     public static String[] getStackTracesStringArray(List<Throwable> throwablesList) {
         if (throwablesList == null) return null;
-        int count = Math.min(throwablesList.size(), MAX_STACK_TRACES);
-        boolean omitted = count < throwablesList.size();
-        final String[] stackTraceStringArray = new String[count + (omitted ? 1 : 0)];
-        for (int i = 0; i < count; i++) {
+        final String[] stackTraceStringArray = new String[throwablesList.size()];
+        for (int i = 0; i < throwablesList.size(); i++) {
             stackTraceStringArray[i] = getStackTraceString(throwablesList.get(i));
         }
-        if (omitted) stackTraceStringArray[count] = STACK_TRACES_OMITTED;
         return stackTraceStringArray;
     }
 
