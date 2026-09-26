@@ -174,8 +174,8 @@ public final class SessionManager {
                 .putExtra(TermuxConstants.SHIZUKU_BINDER_REQUEST_DATA, data);
             requestingBinder = true;
             message = "Requesting a connection from Shizuku...";
-            // The request activity returns the binder and finishes, unlike the manager's launcher.
-            activity.startActivity(intent);
+            // The manager's exported receiver handles this request and sends the binder back.
+            activity.sendBroadcast(intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES));
             main.postDelayed(() -> {
                 if (requestingBinder && currentRequest == binderRequest) {
                     requestingBinder = false;
