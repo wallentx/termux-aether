@@ -1,5 +1,6 @@
 package com.termux.app.session;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ComponentName;
@@ -8,15 +9,20 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.os.Binder;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.Parcel;
 import android.os.RemoteException;
 import android.widget.TextView;
+import com.termux.shared.termux.TermuxConstants;
 import com.termux.terminal.TerminalSessionProcess;
 import java.util.concurrent.CopyOnWriteArrayList;
 import rikka.shizuku.Shizuku;
+import rikka.shizuku.ShizukuProvider;
 
 /** Required normal-session backend. Recovery is an explicit user action, never a command retry. */
 public final class SessionManager {
@@ -29,6 +35,9 @@ public final class SessionManager {
     private volatile ISessionService service;
     private boolean connecting;
     private int attempt;
+    private boolean requestingBinder;
+    private int binderRequest;
+    private boolean requestPermissionOnConnect;
     private java.lang.ref.WeakReference<AlertDialog> prompt = new java.lang.ref.WeakReference<>(null);
     private String message = "Start Shizuku, then connect to open a terminal session.";
 
@@ -45,7 +54,10 @@ public final class SessionManager {
         this.context = context;
         args = new Shizuku.UserServiceArgs(new ComponentName(context, SessionUserService.class))
             .daemon(false).processNameSuffix("aether_sessions").debuggable(false).version(2);
-        Shizuku.addBinderReceivedListenerSticky(() -> main.post(() -> connect(false)));
+        Shizuku.addBinderReceivedListenerSticky(() -> main.post(() -> {
+            requestingBinder = false;
+            connect(requestPermissionOnConnect);
+        }));
         Shizuku.addBinderDeadListener(() -> main.post(() -> {
             connecting = false;
             message = "Shizuku stopped. Start it again to open new sessions.";
@@ -94,6 +106,8 @@ public final class SessionManager {
     private void notifyChanged() { for (Runnable listener : listeners) listener.run(); }
 
     private void connect(boolean requestPermission) {
+        requestPermissionOnConnect |= requestPermission;
+        if (requestingBinder && !Shizuku.pingBinder()) return;
         if (isReady() || connecting) { notifyChanged(); return; }
         if ((context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) == 0) {
             message = "This APK cannot use Android run-as. Install a debuggable Aether build.";
@@ -101,11 +115,15 @@ public final class SessionManager {
         }
         try {
             if (!Shizuku.pingBinder()) {
-                message = "Shizuku is not running. Start it, then tap Connect.";
+                message = "Shizuku is not connected. Tap Connect to request its connection.";
             } else if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
                 message = "Allow Aether to use Shizuku to start terminal sessions.";
-                if (requestPermission) Shizuku.requestPermission(REQUEST_PERMISSION);
+                if (requestPermissionOnConnect) {
+                    requestPermissionOnConnect = false;
+                    Shizuku.requestPermission(REQUEST_PERMISSION);
+                }
             } else {
+                requestPermissionOnConnect = false;
                 connecting = true;
                 final int currentAttempt = ++attempt;
                 message = "Connecting to the session service...";
@@ -124,6 +142,67 @@ public final class SessionManager {
             message = "Cannot connect to Shizuku: " + error.getMessage();
         }
         notifyChanged();
+    }
+
+    private void connect(Activity activity, boolean requestPermission) {
+        connect(requestPermission);
+        if (!Shizuku.pingBinder() && !requestingBinder
+            && (context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+            requestBinder(activity);
+    }
+
+    private void requestBinder(Activity activity) {
+        try {
+            int managerUid = context.getPackageManager()
+                .getApplicationInfo(ShizukuProvider.MANAGER_APPLICATION_ID, 0).uid;
+            final int currentRequest = ++binderRequest;
+            Binder receiver = new Binder() {
+                @Override protected boolean onTransact(int code, Parcel data, Parcel reply, int flags)
+                    throws RemoteException {
+                    if (code != IBinder.FIRST_CALL_TRANSACTION)
+                        return super.onTransact(code, data, reply, flags);
+                    if (Binder.getCallingUid() != managerUid) return false;
+                    IBinder binder = data.readStrongBinder();
+                    main.post(() -> receiveBinder(currentRequest, binder));
+                    return true;
+                }
+            };
+            Bundle data = new Bundle();
+            data.putBinder(TermuxConstants.SHIZUKU_BINDER_REQUEST_BINDER, receiver);
+            Intent intent = new Intent(TermuxConstants.SHIZUKU_REQUEST_BINDER_ACTION)
+                .setPackage(ShizukuProvider.MANAGER_APPLICATION_ID)
+                .putExtra(TermuxConstants.SHIZUKU_BINDER_REQUEST_DATA, data);
+            requestingBinder = true;
+            message = "Requesting a connection from Shizuku...";
+            // The request activity returns the binder and finishes, unlike the manager's launcher.
+            activity.startActivity(intent);
+            main.postDelayed(() -> {
+                if (requestingBinder && currentRequest == binderRequest) {
+                    requestingBinder = false;
+                    message = "Shizuku did not respond within 15 seconds. Open Shizuku, then retry Connect.";
+                    notifyChanged();
+                }
+            }, 15000);
+        } catch (PackageManager.NameNotFoundException error) {
+            message = "Install the Shizuku app, start its service, then return here.";
+        } catch (RuntimeException error) {
+            requestingBinder = false;
+            message = "Cannot request a connection from Shizuku: " + error.getMessage();
+        }
+        notifyChanged();
+    }
+
+    @SuppressLint("RestrictedApi")
+    private void receiveBinder(int currentRequest, IBinder binder) {
+        if (!requestingBinder || currentRequest != binderRequest) return;
+        if (binder == null || !binder.pingBinder()) {
+            requestingBinder = false;
+            message = "Shizuku is not running. Start it in Shizuku, then tap Connect.";
+            notifyChanged();
+            return;
+        }
+        // Use the same attachment handshake as ShizukuProvider; permission checks still apply.
+        Shizuku.onBinderReceived(binder, context.getPackageName());
     }
 
     /** Return true when the caller may create its session now. */
@@ -148,16 +227,20 @@ public final class SessionManager {
         prompt = new java.lang.ref.WeakReference<>(dialog);
         dialog.setOnDismissListener(d -> {
             listeners.remove(changed);
-            if (prompt.get() == dialog) prompt.clear();
+            if (prompt.get() == dialog) {
+                prompt.clear();
+                requestingBinder = false;
+                requestPermissionOnConnect = false;
+            }
         });
         dialog.show();
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> connect(true));
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> connect(activity, true));
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
-            Intent intent = activity.getPackageManager().getLaunchIntentForPackage("moe.shizuku.privileged.api");
+            Intent intent = activity.getPackageManager().getLaunchIntentForPackage(ShizukuProvider.MANAGER_APPLICATION_ID);
             if (intent == null) status.setText("Install the Shizuku app, start its service, then return here.");
             else activity.startActivity(intent);
         });
-        connect(false);
+        connect(activity, false);
         return false;
     }
 

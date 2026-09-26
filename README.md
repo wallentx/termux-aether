@@ -127,6 +127,9 @@ AVF-versus-PRoot speedup has not been established.
    of silently changing execution mode. A recovery shell remains explicitly
    available. Background commands also require the service and report an error
    when it is unavailable. On an unrooted device, restart Shizuku after reboot.
+   If Shizuku is already running but Termux is not connected, **Connect** requests
+   a fresh connection from Shizuku and returns to Termux. **Open Shizuku** opens
+   its management screen when you need to start the service.
 4. For device integration or Arch, follow the
    [API companion setup](https://github.com/wallentx/termux-aether-api#setup).
    The app and companion must use matching signing certificates. Arch additionally
